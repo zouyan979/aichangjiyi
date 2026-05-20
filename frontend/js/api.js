@@ -2,6 +2,7 @@ const API = {
     base: '/api',
     _online: navigator.onLine,
     _listeners: [],
+    _token: localStorage.getItem('memoria_token') || null,
 
     init() {
         window.addEventListener('online', () => {
@@ -13,6 +14,20 @@ const API = {
             this._online = false;
             this._notify('offline');
         });
+    },
+
+    setToken(token) {
+        this._token = token;
+        if (token) {
+            localStorage.setItem('memoria_token', token);
+        } else {
+            localStorage.removeItem('memoria_token');
+        }
+    },
+
+    clearToken() {
+        this._token = null;
+        localStorage.removeItem('memoria_token');
     },
 
     onStatusChange(fn) {
@@ -57,11 +72,6 @@ const API = {
 
     // ===== Core fetch with timeout + retry =====
     async _fetch(path, options = {}, _noQueue = false) {
-        // If offline and not already retrying, queue the request
-        if (!this._online && !_noQueue && options.method !== 'GET' && !options.method) {
-            // GET requests can't be queued (stale data), only mutations
-        }
-
         const url = this.base + path;
         const timeout = options.timeout || 15000;
         const maxRetries = options._retries ?? 1;
@@ -72,12 +82,23 @@ const API = {
                 const controller = new AbortController();
                 const timer = setTimeout(() => controller.abort(), timeout);
 
+                const headers = { 'Content-Type': 'application/json', ...options.headers };
+                if (this._token) {
+                    headers['Authorization'] = 'Bearer ' + this._token;
+                }
+
                 const resp = await fetch(url, {
-                    headers: { 'Content-Type': 'application/json', ...options.headers },
                     ...options,
+                    headers,
                     signal: controller.signal
                 });
                 clearTimeout(timer);
+
+                // Handle 401 — show login screen
+                if (resp.status === 401) {
+                    this._notify('auth_required');
+                    throw new Error('需要登录');
+                }
 
                 if (!resp.ok) {
                     const text = await resp.text().catch(() => '');
@@ -87,14 +108,13 @@ const API = {
                 return data;
             } catch (e) {
                 lastError = e;
-                // Don't retry on client errors (4xx) or abort
+                if (e.message === '需要登录') throw e;
                 if (e.name === 'AbortError') {
                     throw new Error('请求超时，请检查网络连接');
                 }
                 if (e.message?.startsWith('API错误 4')) {
                     throw e;
                 }
-                // Wait before retry (exponential backoff)
                 if (attempt < maxRetries) {
                     await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
                 }
@@ -113,9 +133,13 @@ const API = {
                 // 30s timeout for initial connection
                 const timer = setTimeout(() => controller.abort(), 30000);
 
+                const headers = { 'Content-Type': 'application/json' };
+                if (this._token) {
+                    headers['Authorization'] = 'Bearer ' + this._token;
+                }
                 const resp = await fetch(this.base + '/chat', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers,
                     body: JSON.stringify({ conversation_id: conversationId, content }),
                     signal: controller.signal
                 });
@@ -226,7 +250,13 @@ const API = {
     updateProactiveConfig(data) { return this._fetch('/proactive/config', { method: 'PUT', body: JSON.stringify(data) }); },
     getProactivePending() { return this._fetch('/proactive/pending'); },
     getProactiveLog(limit = 20) { return this._fetch(`/proactive/log?limit=${limit}`); },
-    triggerProactive() { return this._fetch('/proactive/trigger', { method: 'POST' }); }
+    triggerProactive() { return this._fetch('/proactive/trigger', { method: 'POST' }); },
+
+    // ===== Auth =====
+    authStatus() { return this._fetch('/auth/status'); },
+    authLogin(password) { return this._fetch('/auth/login', { method: 'POST', body: JSON.stringify({ password }) }); },
+    authSetPassword(password) { return this._fetch('/auth/set-password', { method: 'POST', body: JSON.stringify({ password }) }); },
+    authRemovePassword() { return this._fetch('/auth/remove-password', { method: 'POST' }); }
 };
 
 API.init();

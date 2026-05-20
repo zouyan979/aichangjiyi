@@ -9,6 +9,17 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+<!-- Login screen (shown when auth is required) -->
+<div id="loginScreen" class="login-screen" style="display:none">
+  <div class="login-box">
+    <h2 class="login-title">Memoria</h2>
+    <p class="login-sub">输入密码以继续访问</p>
+    <input class="fi login-input" id="loginPw" type="password" placeholder="请输入密码" autocomplete="current-password">
+    <div class="login-error" id="loginErr" style="display:none"></div>
+    <button class="btnP login-btn" id="loginBtn">登录</button>
+  </div>
+</div>
+
 <div id="app">
 
   <header class="hdr">
@@ -16,12 +27,13 @@
       <h1 class="logo">Memoria</h1>
       <span class="sub">长记忆 AI</span>
     </div>
-    <div class="hdrR" style="display:flex;align-items:center;gap:8px">
+    <div class="hdrR">
       <select class="convSel" id="convSel" title="切换对话"></select>
       <div class="convBtns">
         <button class="convBtn" id="btnNewConv" title="新建对话">+</button>
         <button class="convBtn" id="btnDelConv" title="删除对话">×</button>
       </div>
+      <div class="hdrSep"></div>
       <button class="ib" id="btnMemory" title="记忆面板">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/><path d="M9 21h6"/><path d="M10 17v4"/><path d="M14 17v4"/></svg>
       </button>

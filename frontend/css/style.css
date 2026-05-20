@@ -61,7 +61,8 @@ code{background:var(--surface2);padding:1px 5px;border-radius:3px;font-family:va
 .hdrL{display:flex;align-items:center;gap:10px}
 .logo{font-family:var(--ff);font-size:1.35rem;font-weight:600;color:var(--accent)}
 .sub{font-size:.72rem;color:var(--textM);letter-spacing:.08em;text-transform:uppercase}
-.hdrR{display:flex;gap:6px}
+.hdrR{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
+.hdrSep{display:none}
 .ib{width:36px;height:36px;border-radius:var(--rs);display:flex;align-items:center;justify-content:center;transition:all .2s;color:var(--text2)}
 .ib:hover{background:var(--surfaceH);color:var(--text)}
 .ib svg{width:18px;height:18px;pointer-events:none}
@@ -245,6 +246,15 @@ textarea.fi{min-height:80px;resize:vertical;font-family:var(--fb)}
 .net-banner.ok{background:var(--ok);color:#fff}
 .net-banner.err{background:var(--err);color:#fff}
 
+/* Login screen */
+.login-screen{position:fixed;inset:0;z-index:500;display:flex;align-items:center;justify-content:center;background:var(--bg)}
+.login-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:40px 36px;width:min(380px,90vw);display:flex;flex-direction:column;align-items:center;gap:16px}
+.login-title{font-family:var(--ff);font-size:1.8rem;font-weight:300;color:var(--accent)}
+.login-sub{font-size:.85rem;color:var(--text2);margin-bottom:8px}
+.login-input{text-align:center;font-size:1rem;padding:12px 16px;width:100%}
+.login-error{color:var(--err);font-size:.8rem;width:100%;text-align:center}
+.login-btn{width:100%;margin-top:8px}
+
 /* Collapsible sections */
 .collapsible .collapse-content{overflow:hidden;transition:max-height .4s ease}
 .collapsible.collapsed .collapse-content{max-height:0 !important}
@@ -254,9 +264,88 @@ textarea.fi{min-height:80px;resize:vertical;font-family:var(--fb)}
 .collapsible-header:hover{color:var(--accent)}
 .pnlB{overflow-y:auto;flex:1;padding:20px 24px;display:flex;flex-direction:column;gap:24px}
 
-@media(max-width:600px){
-  .hdr{padding:12px 16px}.chat{padding:0 12px}.inArea{padding:10px 12px 16px}
-  .bub{font-size:.85rem}.welcome h2{font-size:1.4rem}
-  .convSel{max-width:100px}
-  .apiGuideItem{font-size:.75rem;padding:4px 8px}
+/* ===== Responsive: Tablet (768px and below) ===== */
+@media(max-width:768px){
+  #app{max-width:100%}
+  .hdr{padding:12px 16px;flex-wrap:wrap;gap:8px}
+  .hdrL{gap:8px}
+  .hdrR{gap:4px}
+  .convSel{max-width:120px;font-size:.75rem;padding:3px 6px}
+  .ib{width:34px;height:34px}
+  .ib svg{width:16px;height:16px}
+  .chat{padding:0 16px}
+  .inArea{padding:10px 16px 16px}
+  .inWrap textarea{font-size:.9rem}
+  .pnl{width:min(380px,85vw)}
+  .modalBox{width:min(480px,94vw)}
+  .fRow{flex-direction:column;gap:10px}
+  .stage{min-width:40px}
+  .stageLabel{font-size:.65rem}
+  .stageDot{width:12px;height:12px}
+}
+
+/* ===== Responsive: Phone (480px and below) ===== */
+@media(max-width:480px){
+  html{font-size:14px}
+  .hdr{padding:10px 12px}
+  .hdrL .sub{display:none}
+  .convSel{max-width:90px;font-size:.72rem}
+  .convBtn{width:26px;height:26px}
+  .ib{width:32px;height:32px}
+  .chat{padding:0 10px}
+  .chatIn{padding:16px 0}
+  .welcome h2{font-size:1.3rem}
+  .welcome p{font-size:.82rem}
+  .msgC{max-width:88%}
+  .bub{padding:8px 12px;font-size:.85rem;line-height:1.65}
+  .inArea{padding:8px 10px 14px}
+  .inWrap{padding:6px 6px 6px 12px}
+  .sBtn{width:34px;height:34px}
+  .inFoot{font-size:.65rem;gap:8px}
+  .pnl{width:100vw;border-left:none}
+  .pnlH{padding:16px}
+  .pnlB{padding:16px}
+  .modalBox{width:100vw;max-height:100vh;border-radius:12px}
+  .mH{padding:16px}
+  .mB{padding:16px}
+  .fi{padding:8px 12px;font-size:.82rem}
+  .btnP,.btnS{padding:10px;font-size:.82rem}
+  .mA{flex-direction:column}
+  .stats{grid-template-columns:1fr 1fr;gap:8px}
+  .statN{font-size:1.2rem}
+  .stage{min-width:36px}
+  .stageDot{width:10px;height:10px}
+  .stageLabel{font-size:.6rem}
+  .stageLine{min-width:12px}
+  .apiGuideItem{font-size:.72rem;padding:4px 8px}
+  .ptag{font-size:.7rem;padding:2px 8px}
+  .net-banner{font-size:.75rem;padding:6px 12px}
+}
+
+/* ===== Touch-friendly: ensure minimum tap targets ===== */
+@media(hover:none) and (pointer:coarse){
+  .ib,.xb,.convBtn,.sBtn,.btnO,.btnP,.btnS,.tglB,.apiGuideItem{
+    min-height:44px;min-width:44px
+  }
+  .ptag{min-height:36px;display:inline-flex;align-items:center}
+  .collapsible-header{min-height:44px;display:flex;align-items:center}
+  .inputBtn{min-width:44px;min-height:44px}
+  /* Prevent double-tap zoom on buttons */
+  button,a,.ptag,.apiGuideItem,.collapsible-header{touch-action:manipulation}
+}
+
+/* ===== Landscape phone: more compact ===== */
+@media(max-height:500px) and (orientation:landscape){
+  .hdr{padding:6px 16px}
+  .welcome{min-height:30vh}
+  .welcome h2{font-size:1.2rem}
+  .inArea{padding:6px 16px 10px}
+  .chatIn{padding:12px 0}
+  .msg{margin-bottom:12px}
+}
+
+/* ===== Safe area for notched phones ===== */
+@supports(padding-top:env(safe-area-inset-top)){
+  .hdr{padding-top:max(12px,env(safe-area-inset-top))}
+  .inArea{padding-bottom:max(16px,env(safe-area-inset-bottom))}
 }

@@ -20,6 +20,8 @@ class App {
     async _init() {
         try {
             console.log('[App] Initializing...');
+            // Check auth status first
+            await this._initAuth();
             await this._loadConversations();
             console.log('[App] Conversations loaded, activeConvId:', this.activeConvId);
             this.updateStatus();
@@ -28,6 +30,57 @@ class App {
         } catch (e) {
             console.error('[App] Init error:', e);
         }
+    }
+
+    async _initAuth() {
+        const loginScreen = document.getElementById('loginScreen');
+        const loginBtn = document.getElementById('loginBtn');
+        const loginPw = document.getElementById('loginPw');
+        const loginErr = document.getElementById('loginErr');
+
+        // Check if server requires auth
+        let status;
+        try {
+            status = await API.authStatus();
+        } catch {
+            return; // Can't reach server, let it fail later
+        }
+
+        if (!status.required) return; // No password set, skip
+
+        // If we have a token, try a test request
+        if (API._token) {
+            try {
+                await API.getStats();
+                return; // Token valid
+            } catch (e) {
+                if (e.message !== '需要登录') return; // Other error
+                API.clearToken(); // Token expired
+            }
+        }
+
+        // Show login screen
+        loginScreen.style.display = 'flex';
+
+        return new Promise((resolve) => {
+            const doLogin = async () => {
+                const pw = loginPw.value.trim();
+                if (!pw) return;
+                loginErr.style.display = 'none';
+                try {
+                    const result = await API.authLogin(pw);
+                    API.setToken(result.token);
+                    loginScreen.style.display = 'none';
+                    resolve();
+                } catch (e) {
+                    loginErr.textContent = e.message.includes('密码') ? e.message : '登录失败';
+                    loginErr.style.display = 'block';
+                    loginPw.select();
+                }
+            };
+            loginBtn.onclick = doLogin;
+            loginPw.onkeydown = (e) => { if (e.key === 'Enter') doLogin(); };
+        });
     }
 
     _bind() {
@@ -97,7 +150,17 @@ class App {
         document.body.prepend(this.$netBanner);
 
         API.onStatusChange((status) => {
-            if (status === 'offline') {
+            if (status === 'auth_required') {
+                API.clearToken();
+                const loginScreen = document.getElementById('loginScreen');
+                const loginPw = document.getElementById('loginPw');
+                const loginErr = document.getElementById('loginErr');
+                loginScreen.style.display = 'flex';
+                loginErr.textContent = '登录已过期，请重新输入密码';
+                loginErr.style.display = 'block';
+                loginPw.value = '';
+                loginPw.focus();
+            } else if (status === 'offline') {
                 this._showNetBanner('网络已断开，消息将在恢复后自动发送', 'warn');
             } else if (status === 'online') {
                 this._showNetBanner('网络已恢复', 'ok');

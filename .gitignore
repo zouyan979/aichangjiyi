@@ -11,6 +11,11 @@ __pycache__/
 .venv/
 venv/
 
+# PyInstaller
+build/
+dist/
+*.spec.bak
+
 # Environment
 .env
 .env.*

@@ -1,0 +1,16 @@
+[Unit]
+Description=Memoria - Long Memory AI
+After=network.target
+
+[Service]
+Type=simple
+User=www
+Group=www
+WorkingDirectory=/www/wwwroot/memoria
+ExecStart=/www/wwwroot/memoria/venv/bin/gunicorn -c deploy/gunicorn.conf.py backend.main:app
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

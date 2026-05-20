@@ -1,6 +1,15 @@
 import os
+import sys
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "data", "memoria.db")
+# Resolve base directory:
+# - PyInstaller bundled: exe's directory (persistent data)
+# - Normal: backend's directory
+if getattr(sys, 'frozen', False):
+    _BASE_DIR = os.path.dirname(sys.executable)
+else:
+    _BASE_DIR = os.path.dirname(__file__)
+
+DB_PATH = os.path.join(_BASE_DIR, "data", "memoria.db")
 
 # Token budget defaults
 DEFAULT_TOKEN_BUDGET = 3000

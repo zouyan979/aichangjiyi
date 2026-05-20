@@ -3,3 +3,10 @@ uvicorn[standard]>=0.24.0
 httpx>=0.25.0
 jieba>=0.42.1
 pydantic>=2.0.0
+
+# Desktop packaging
+pywebview>=4.0
+pyinstaller>=6.0
+
+# Server deployment
+gunicorn>=21.2

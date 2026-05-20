@@ -14,9 +14,10 @@ setup_logging(level=logging.INFO)
 log = logging.getLogger("memoria")
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.responses import Response
 
 from .database import get_db, close_db
 from .routers import config as config_router
@@ -25,6 +26,7 @@ from .routers import conversations as conv_router
 from .routers import memory as memory_router
 from .routers import persona as persona_router
 from .routers import proactive as proactive_router
+from .routers import auth as auth_router
 from .services.proactive_engine import proactive_engine
 
 
@@ -50,7 +52,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    path = request.url.path
+    # Skip auth for: auth endpoints, static files, localhost
+    skip = (
+        path.startswith("/api/auth")
+        or path.startswith("/css")
+        or path.startswith("/js")
+        or path == "/"
+        or path == "/index.html"
+        or not path.startswith("/api")
+    )
+    if not skip:
+        from .routers.auth import is_localhost, is_auth_configured, verify_token
+        # Localhost always allowed (desktop app)
+        if not is_localhost(request) and is_auth_configured():
+            token = request.headers.get("Authorization", "").removeprefix("Bearer ")
+            if not verify_token(token):
+                return Response('{"detail":"需要登录"}', status_code=401,
+                                media_type="application/json")
+    return await call_next(request)
+
+
 # Include routers
+app.include_router(auth_router.router)
 app.include_router(config_router.router)
 app.include_router(chat_router.router)
 app.include_router(conv_router.router)
@@ -59,6 +86,11 @@ app.include_router(persona_router.router)
 app.include_router(proactive_router.router)
 
 # Serve frontend static files
-frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
+if getattr(sys, 'frozen', False):
+    # PyInstaller: frontend is bundled in _MEIPASS
+    _base = sys._MEIPASS
+else:
+    _base = os.path.dirname(os.path.dirname(__file__))
+frontend_dir = os.path.join(_base, "frontend")
 if os.path.exists(frontend_dir):
     app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
