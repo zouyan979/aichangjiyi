@@ -152,6 +152,13 @@ def init_schema(conn: sqlite3.Connection):
         conn.execute("ALTER TABLE conversation_summaries ADD COLUMN confidence REAL DEFAULT 0.8")
         conn.commit()
 
+    # Migration: add relationship_stage column to ai_persona if missing
+    try:
+        conn.execute("SELECT relationship_stage FROM ai_persona LIMIT 1")
+    except Exception:
+        conn.execute("ALTER TABLE ai_persona ADD COLUMN relationship_stage TEXT DEFAULT 'acquaintance'")
+        conn.commit()
+
 
 def _default_persona():
     base = "你是Memoria，一个温暖、善于倾听的AI伙伴。你像老朋友一样和用户交流，真诚关心对方的生活。"

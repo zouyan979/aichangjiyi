@@ -138,6 +138,8 @@ code{background:var(--surface2);padding:1px 5px;border-radius:3px;font-family:va
 .ptags{display:flex;flex-wrap:wrap;gap:5px}
 .ptag{font-size:.75rem;padding:3px 10px;border-radius:20px;background:var(--accentSoft);color:var(--accent);border:1px solid rgba(200,149,108,.2);cursor:pointer}
 .ptag:hover{background:rgba(200,149,108,.2)}
+.ptag-warn{background:rgba(192,160,80,.12);color:var(--warn);border-color:rgba(192,160,80,.2)}
+.ptag-low{background:rgba(192,96,80,.1);color:var(--err);border-color:rgba(192,96,80,.2);text-decoration:line-through}
 
 .sList{display:flex;flex-direction:column;gap:10px}
 .sItem{background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);padding:12px 14px;transition:all .2s}
@@ -213,6 +215,19 @@ textarea.fi{min-height:80px;resize:vertical;font-family:var(--fb)}
 .gList{display:flex;flex-direction:column;gap:8px}
 .gItem{background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);padding:10px 14px}
 .gDate{font-size:.7rem;color:var(--textM);font-family:var(--fm)}
+
+/* Relationship stage progress */
+.stageBar{display:flex;align-items:center;gap:0;margin:8px 0 4px}
+.stage{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:48px}
+.stageDot{width:14px;height:14px;border-radius:50%;border:2px solid var(--border);background:var(--surface);transition:all .3s}
+.stage-done .stageDot{background:var(--ok);border-color:var(--ok)}
+.stage-current .stageDot{background:var(--accent);border-color:var(--accent);box-shadow:0 0 8px var(--accentSoft)}
+.stage-pending .stageDot{background:var(--surface);border-color:var(--border)}
+.stageLabel{font-size:.7rem;color:var(--textM)}
+.stage-current .stageLabel{color:var(--accent);font-weight:600}
+.stage-done .stageLabel{color:var(--ok)}
+.stageLine{flex:1;height:2px;background:var(--border);min-width:20px;transition:background .3s}
+.stageLine.done{background:var(--ok)}
 .gText{font-size:.82rem;color:var(--text2);margin-top:4px;line-height:1.5}
 
 @keyframes fu{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
@@ -221,6 +236,14 @@ textarea.fi{min-height:80px;resize:vertical;font-family:var(--fb)}
 
 .toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:var(--err);color:white;padding:10px 20px;border-radius:8px;font-size:.85rem;z-index:200;animation:fu .3s ease}
 .toast.ok{background:var(--ok)}
+
+/* Network status banner */
+.net-banner{position:fixed;top:0;left:0;right:0;padding:8px 16px;text-align:center;font-size:.82rem;z-index:300;
+  transform:translateY(-100%);transition:transform .35s ease,opacity .35s ease;opacity:0;pointer-events:none}
+.net-banner.show{transform:translateY(0);opacity:1;pointer-events:auto}
+.net-banner.warn{background:var(--warn);color:#1a1400}
+.net-banner.ok{background:var(--ok);color:#fff}
+.net-banner.err{background:var(--err);color:#fff}
 
 /* Collapsible sections */
 .collapsible .collapse-content{overflow:hidden;transition:max-height .4s ease}

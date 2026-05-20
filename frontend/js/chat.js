@@ -23,23 +23,28 @@ class ChatUI {
         this.$send.addEventListener('click', () => this.send());
     }
 
-    async send() {
-        const text = this.$inp.value.trim();
+    async send(textOverride) {
+        const text = textOverride || this.$inp.value.trim();
         if (!text || this.busy) return;
 
         const convId = this.app.getActiveConversation();
         if (!convId) return;
 
-        this.$inp.value = '';
-        this.$inp.style.height = 'auto';
+        if (!textOverride) {
+            this.$inp.value = '';
+            this.$inp.style.height = 'auto';
+        }
         this.$send.disabled = true;
         this._hideWelcome();
         this.busy = true;
 
-        this._appendMsg({ role: 'user', content: text, created_at: new Date().toISOString() });
+        if (!textOverride) {
+            this._appendMsg({ role: 'user', content: text, created_at: new Date().toISOString() });
+        }
 
         const placeholder = this._placeholder();
         let fullContent = '';
+        let gotError = false;
 
         try {
             this.abortController = new AbortController();
@@ -50,14 +55,25 @@ class ChatUI {
                 } else if (event.type === 'done') {
                     this._finalize(placeholder, fullContent, false);
                 } else if (event.type === 'error') {
-                    this._finalize(placeholder, '⚠ ' + event.message, false);
+                    gotError = true;
+                    this._finalizeWithError(placeholder, fullContent, event.message);
                 }
             }
             if (fullContent && !placeholder.dataset.finalized) {
                 this._finalize(placeholder, fullContent, false);
             }
+            if (!fullContent && !gotError && !placeholder.dataset.finalized) {
+                this._finalizeWithError(placeholder, '', '未收到任何响应，请检查网络或API配置');
+            }
         } catch (e) {
-            this._finalize(placeholder, '⚠ ' + e.message, false);
+            gotError = true;
+            let msg = e.message;
+            if (e.name === 'AbortError' || msg.includes('超时')) {
+                msg = '请求超时，请检查网络连接或API配置';
+            } else if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+                msg = '网络连接失败，请检查网络状态';
+            }
+            this._finalizeWithError(placeholder, fullContent, msg);
         } finally {
             this.busy = false;
             this.abortController = null;
@@ -151,6 +167,37 @@ class ChatUI {
         const c = el.querySelector('.msgC');
         const time = this._formatTime(new Date().toISOString());
         c.innerHTML += `<div class="meta">${isProactive ? '<span class="tag">主动消息</span>' : ''}<span>${time}</span></div>`;
+        this._scroll();
+    }
+
+    _finalizeWithError(el, partialContent, errorMsg) {
+        el.dataset.finalized = '1';
+        el.dataset.error = '1';
+        const bub = el.querySelector('.bub');
+        let html = '';
+        if (partialContent) {
+            html += `<div style="opacity:.7;margin-bottom:8px">${this._fmt(this._filterCode(partialContent))}</div>`;
+        }
+        html += `<div style="color:var(--err);font-size:.85rem">⚠ ${this._esc(errorMsg)}</div>`;
+        html += `<button class="btnO retryBtn" style="margin-top:6px;font-size:.8rem;padding:3px 12px">重试</button>`;
+        bub.innerHTML = html;
+        // Bind retry
+        const retryBtn = bub.querySelector('.retryBtn');
+        if (retryBtn) {
+            retryBtn.addEventListener('click', () => {
+                el.remove();
+                // Find the last user message in chat
+                const msgs = this.$chatIn.querySelectorAll('.msg.user');
+                const lastUserMsg = msgs[msgs.length - 1];
+                if (lastUserMsg) {
+                    const text = lastUserMsg.querySelector('.bub').textContent;
+                    this.send(text);
+                }
+            });
+        }
+        const c = el.querySelector('.msgC');
+        const time = this._formatTime(new Date().toISOString());
+        c.innerHTML += `<div class="meta"><span>${time}</span></div>`;
         this._scroll();
     }
 

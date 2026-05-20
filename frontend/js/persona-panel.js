@@ -49,6 +49,31 @@ class PersonaPanel {
     _buildHTML(persona, growthLog) {
         let h = '';
 
+        // Relationship stage progress
+        const stages = persona.all_stages || [];
+        const currentKey = persona.relationship_stage || 'acquaintance';
+        const currentLabel = persona.relationship_stage_label || '初识';
+        const currentIdx = stages.findIndex(s => s.key === currentKey);
+        h += '<div class="st">关系阶段</div>';
+        h += `<div class="stageBar">`;
+        stages.forEach((s, i) => {
+            const cls = i < currentIdx ? 'stage-done' : i === currentIdx ? 'stage-current' : 'stage-pending';
+            h += `<div class="stage ${cls}">
+                <div class="stageDot"></div>
+                <div class="stageLabel">${this._esc(s.label)}</div>
+            </div>`;
+            if (i < stages.length - 1) {
+                h += `<div class="stageLine ${i < currentIdx ? 'done' : ''}"></div>`;
+            }
+        });
+        h += `</div>`;
+        h += `<div style="color:var(--text2);font-size:.78rem;margin-top:4px">当前：${this._esc(currentLabel)}`;
+        const nextStage = stages[currentIdx + 1];
+        if (nextStage) {
+            h += ` · 下一阶段需要 ${nextStage.min_days}天 / ${nextStage.min_messages}条消息`;
+        }
+        h += '</div>';
+
         // Persona editor
         h += '<div class="st">AI人设</div>';
         h += `<div class="pCard">

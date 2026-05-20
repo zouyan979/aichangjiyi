@@ -1,14 +1,25 @@
 from __future__ import annotations
 from fastapi import APIRouter
 from ..models import PersonaUpdate
-from ..services.persona_service import persona_service
+from ..services.persona_service import persona_service, RELATIONSHIP_STAGES, STAGE_ORDER
 
 router = APIRouter(prefix="/api/persona", tags=["persona"])
 
 
 @router.get("")
 def get_persona():
-    return persona_service.get_persona()
+    persona = persona_service.get_persona()
+    stage_key = persona.get("relationship_stage", "acquaintance")
+    stage_info = RELATIONSHIP_STAGES.get(stage_key, {})
+    persona["relationship_stage_label"] = stage_info.get("label", "初识")
+    persona["relationship_stage_style"] = stage_info.get("style", "")
+    persona["all_stages"] = [
+        {"key": k, "label": RELATIONSHIP_STAGES[k]["label"],
+         "min_days": RELATIONSHIP_STAGES[k]["min_days"],
+         "min_messages": RELATIONSHIP_STAGES[k]["min_messages"]}
+        for k in STAGE_ORDER
+    ]
+    return persona
 
 
 @router.put("")

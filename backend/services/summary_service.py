@@ -49,7 +49,7 @@ class SummaryService:
         prompt = f"""你是一个记忆管理系统。分析以下对话片段，提取关键信息。
 
 要求返回JSON格式（只输出JSON，不要其他内容）：
-{{"summary":"150字以内的对话摘要","summary_confidence":0.85,"topics":["话题1","话题2"],"key_facts":["重要事实"],"mood":"对话氛围","user_insights":{{"interests":[{{"item":"兴趣名","confidence":0.9}}],"traits":[{{"item":"性格特征","confidence":0.8}}],"facts":[{{"item":"事实","confidence":0.95}}],"preferences":[{{"item":"偏好","confidence":0.7}}],"goals":[{{"item":"目标","confidence":0.6}}]}}}}
+{{"summary":"150字以内的对话摘要","summary_confidence":0.85,"topics":["话题1","话题2"],"key_facts":["重要事实"],"mood":"对话氛围","user_insights":{{"interests":[{{"item":"兴趣名","confidence":0.9}}],"traits":[{{"item":"性格特征","confidence":0.8}}],"facts":[{{"item":"事实","confidence":0.95}}],"preferences":[{{"item":"偏好","confidence":0.7}}],"goals":[{{"item":"目标","confidence":0.6}}]}},"conflicts":[{{"category":"interest","old":"旧内容","new":"新内容","reason":"冲突原因"}}]}}
 
 summary_confidence 说明（你对这段摘要整体准确性的自评）：
 - 0.9-1.0：对话内容明确，摘要高度可靠
@@ -63,6 +63,8 @@ user_insights 置信度说明：
 - 0.5-0.7：AI推断的，证据不够充分
 - 0.3-0.5：非常不确定的推测
 只提取有把握的信息，不确定的不要提取。
+
+conflicts 说明：如果对话中用户表达的新偏好/事实与已有画像中的信息矛盾（如之前喜欢Java现在改用Python），在此列出。old是画像中已有的矛盾内容，new是用户新表达的内容。如果没有冲突，返回空数组[]。
 
 当前用户画像：{profile_json}
 对话内容：{conv_text}"""
@@ -128,6 +130,13 @@ user_insights 置信度说明：
                 for fact in data.get("key_facts", []):
                     if fact and len(fact) > 5:
                         memory_service.add_core_fact(fact, priority=3, category="extracted")
+
+                # Handle memory conflicts
+                conflicts = data.get("conflicts", [])
+                if conflicts:
+                    resolved = memory_service.resolve_conflicts(conflicts)
+                    if resolved:
+                        log.info("Resolved %d memory conflicts", resolved)
             else:
                 log.info("Low confidence (%.2f), skipping insight extraction and fact promotion", summary_confidence)
 

@@ -80,6 +80,55 @@ class MemoryService:
                     # Legacy format: plain string
                     self.add_profile_item(category, item.strip(), source)
 
+    def resolve_conflicts(self, conflicts: list) -> int:
+        """Handle detected memory conflicts by lowering confidence on old items.
+        conflicts: [{"category": "interest", "old": "Java", "new": "Python", "reason": "..."}]
+        Returns number of conflicts resolved."""
+        if not conflicts:
+            return 0
+        db = get_db()
+        resolved = 0
+        for c in conflicts:
+            cat = c.get("category", "")
+            old = c.get("old", "")
+            reason = c.get("reason", "")
+            if not cat or not old:
+                continue
+            # Find the old item and lower its confidence
+            row = db.execute(
+                "SELECT id, confidence FROM user_profiles WHERE category=? AND content=?",
+                (cat, old)
+            ).fetchone()
+            if row:
+                new_conf = max(0.2, (row["confidence"] or 0.8) * 0.4)
+                db.execute(
+                    "UPDATE user_profiles SET confidence=?, updated_at=datetime('now','localtime') WHERE id=?",
+                    (new_conf, row["id"])
+                )
+                log.info("Conflict resolved: [%s] '%s' confidence %.2f -> %.2f (%s)",
+                         cat, old, row["confidence"], new_conf, reason)
+                resolved += 1
+            else:
+                # Try fuzzy match (content contains old or old contains content)
+                rows = db.execute(
+                    "SELECT id, content, confidence FROM user_profiles WHERE category=?",
+                    (cat,)
+                ).fetchall()
+                for r in rows:
+                    if old in r["content"] or r["content"] in old:
+                        new_conf = max(0.2, (r["confidence"] or 0.8) * 0.4)
+                        db.execute(
+                            "UPDATE user_profiles SET confidence=?, updated_at=datetime('now','localtime') WHERE id=?",
+                            (new_conf, r["id"])
+                        )
+                        log.info("Conflict resolved (fuzzy): [%s] '%s' confidence %.2f -> %.2f (%s)",
+                                 cat, r["content"], r["confidence"], new_conf, reason)
+                        resolved += 1
+                        break
+        if resolved:
+            db.commit()
+        return resolved
+
     # ---- Core Facts ----
     def get_core_facts(self) -> list:
         db = get_db()

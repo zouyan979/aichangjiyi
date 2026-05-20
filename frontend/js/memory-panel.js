@@ -21,6 +21,10 @@ class MemoryPanel {
         this.$ov.classList.remove('show');
     }
 
+    isOpen() {
+        return this.$pnl.classList.contains('show');
+    }
+
     async render() {
         try {
             const [profile, facts, summaries, stats] = await Promise.all([
@@ -55,7 +59,10 @@ class MemoryPanel {
                 shown.add(label);
                 h += `<div class="pf"><span class="pl">${label}</span><div class="ptags">`;
                 for (const item of items) {
-                    h += `<span class="ptag" data-action="delete-profile" data-cat="${cat}" data-id="${item.id}" title="点击删除">${this._esc(item.content)}</span>`;
+                    const conf = item.confidence ?? 0.8;
+                    const confClass = conf < 0.4 ? 'ptag-low' : conf < 0.6 ? 'ptag-warn' : '';
+                    const confTitle = conf < 0.6 ? ` (置信度: ${Math.round(conf * 100)}% - 可能不准确)` : '';
+                    h += `<span class="ptag ${confClass}" data-action="delete-profile" data-cat="${cat}" data-id="${item.id}" title="点击删除${confTitle}">${this._esc(item.content)}</span>`;
                 }
                 h += '</div></div>';
             }

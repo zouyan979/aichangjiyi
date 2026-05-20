@@ -13,6 +13,7 @@ class App {
 
         this._bind();
         this._initTheme();
+        this._initNetworkBanner();
         this._init();
     }
 
@@ -87,6 +88,65 @@ class App {
         });
     }
 
+    // ===== Network Status =====
+    _initNetworkBanner() {
+        // Create banner element
+        this.$netBanner = document.createElement('div');
+        this.$netBanner.className = 'net-banner';
+        this.$netBanner.style.display = 'none';
+        document.body.prepend(this.$netBanner);
+
+        API.onStatusChange((status) => {
+            if (status === 'offline') {
+                this._showNetBanner('网络已断开，消息将在恢复后自动发送', 'warn');
+            } else if (status === 'online') {
+                this._showNetBanner('网络已恢复', 'ok');
+                setTimeout(() => this._hideNetBanner(), 3000);
+            } else if (status === 'queued') {
+                const n = API.getQueueSize();
+                if (n > 0) {
+                    this._showNetBanner(`离线中，${n} 条操作待发送`, 'warn');
+                }
+            } else if (status === 'flushed') {
+                this._showNetBanner('离线操作已同步', 'ok');
+                setTimeout(() => this._hideNetBanner(), 3000);
+            }
+        });
+
+        // Periodic health check (every 30s)
+        this._serverDown = false;
+        setInterval(async () => {
+            if (!API.isOnline()) return;
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), 5000);
+            try {
+                await fetch('/api/memory/stats', { method: 'GET', signal: ctrl.signal });
+                clearTimeout(timer);
+                if (this._serverDown) {
+                    this._serverDown = false;
+                    this._hideNetBanner();
+                }
+            } catch {
+                clearTimeout(timer);
+                if (!this._serverDown) {
+                    this._serverDown = true;
+                    this._showNetBanner('无法连接到服务器，请检查后端是否运行', 'err');
+                }
+            }
+        }, 30000);
+    }
+
+    _showNetBanner(msg, type) {
+        this.$netBanner.textContent = msg;
+        this.$netBanner.className = 'net-banner show ' + type;
+        this.$netBanner.style.display = '';
+    }
+
+    _hideNetBanner() {
+        this.$netBanner.classList.remove('show');
+        setTimeout(() => { this.$netBanner.style.display = 'none'; }, 400);
+    }
+
     // ===== Conversations =====
     async _loadConversations() {
         try {
@@ -147,6 +207,10 @@ class App {
 
     async onChatComplete() {
         setTimeout(() => this.proactive.poll(), 2000);
+        // Auto-refresh memory panel if it's open
+        if (this.memory.isOpen()) {
+            this.memory.render();
+        }
     }
 
     async updateStatus() {

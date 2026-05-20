@@ -1,7 +1,11 @@
 from __future__ import annotations
+import asyncio
 import httpx
 import json
+import logging
 from typing import AsyncGenerator
+
+log = logging.getLogger("memoria.llm")
 
 
 class LLMService:
@@ -137,7 +141,8 @@ class LLMService:
                         if result:
                             yield result
 
-    async def generate(self, messages: list[dict], max_tokens: int = 2048) -> str:
+    async def generate(self, messages: list[dict], max_tokens: int = 2048,
+                       max_retries: int = 2) -> str:
         if not self._active_config:
             raise ValueError("API未配置")
 
@@ -146,13 +151,32 @@ class LLMService:
         headers = self._build_headers(cfg, anthropic)
         body = self._build_body(cfg, messages, max_tokens, False, anthropic)
 
-        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0), verify=False, trust_env=False) as client:
-            resp = await client.post(cfg["base_url"], headers=headers, json=body)
-            if resp.status_code != 200:
-                raise ValueError(f"API错误 {resp.status_code}: {resp.text[:300]}")
-            resp_text = resp.content.decode("utf-8", errors="replace")
-            data = json.loads(resp_text)
-            return self._parse_response(data, anthropic)
+        last_error = None
+        for attempt in range(max_retries + 1):
+            try:
+                async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0), verify=False, trust_env=False) as client:
+                    resp = await client.post(cfg["base_url"], headers=headers, json=body)
+                    if resp.status_code == 429:
+                        retry_after = int(resp.headers.get("retry-after", 2 * (attempt + 1)))
+                        log.warning("Rate limited, retrying in %ds (attempt %d/%d)", retry_after, attempt + 1, max_retries + 1)
+                        await asyncio.sleep(retry_after)
+                        last_error = ValueError(f"API限流 {resp.status_code}")
+                        continue
+                    if resp.status_code != 200:
+                        raise ValueError(f"API错误 {resp.status_code}: {resp.text[:300]}")
+                    resp_text = resp.content.decode("utf-8", errors="replace")
+                    data = json.loads(resp_text)
+                    return self._parse_response(data, anthropic)
+            except (httpx.ConnectError, httpx.TimeoutException, httpx.ReadError) as e:
+                last_error = e
+                if attempt < max_retries:
+                    wait = 2 ** attempt
+                    log.warning("LLM call failed (%s), retrying in %ds (attempt %d/%d)", e, wait, attempt + 1, max_retries + 1)
+                    await asyncio.sleep(wait)
+            except ValueError:
+                raise
+
+        raise last_error
 
     async def test_connection(self, config: dict) -> bool:
         url = config["base_url"]

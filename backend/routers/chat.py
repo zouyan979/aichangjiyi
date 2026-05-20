@@ -90,6 +90,14 @@ async def _post_chat_tasks(conversation_id: int, user_msg: str, ai_msg: str):
         if len(summaries) > 0 and len(summaries) % 2 == 0:
             await _check_persona_growth(summaries)
 
+        # Check relationship stage upgrade
+        new_stage = persona_service.update_relationship_stage()
+        if new_stage:
+            stage_info = persona_service.RELATIONSHIP_STAGES.get(new_stage, {})
+            persona_service.add_growth_event(
+                f"关系升级为「{stage_info.get('label', new_stage)}」"
+            )
+
         # Extract events for proactive messages
         proactive_engine.extract_events([{"role": "user", "content": user_msg}])
 
