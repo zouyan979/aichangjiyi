@@ -1,44 +1,47 @@
 @echo off
-chcp 65001 >nul
+chcp 65001 >nul 2>&1
+cd /d "%~dp0"
 echo ========================================
-echo   Memoria Desktop 打包工具
+echo   Memoria Desktop Builder
 echo ========================================
 echo.
 
-:: Check Python
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo [错误] 未找到 Python，请先安装 Python 3.10+
-    pause
-    exit /b 1
+    py --version >nul 2>&1
+    if errorlevel 1 (
+        echo [ERROR] Python not found. Please install Python 3.10+
+        pause
+        exit /b 1
+    )
+    set PYTHON=py
+) else (
+    set PYTHON=python
 )
 
-:: Install dependencies
-echo [1/3] 安装依赖...
-pip install -r backend\requirements.txt pywebview pyinstaller --quiet
+echo [1/3] Installing dependencies...
+%PYTHON% -m pip install -r backend\requirements.txt pywebview pyinstaller --quiet
 if errorlevel 1 (
-    echo [错误] 依赖安装失败
+    echo [ERROR] Failed to install dependencies
     pause
     exit /b 1
 )
 
-:: Build
-echo [2/3] 打包中... (首次约需2-5分钟)
+echo [2/3] Building... (first time takes 2-5 min)
 pyinstaller memoria_desktop.spec --clean --noconfirm
 if errorlevel 1 (
-    echo [错误] 打包失败
+    echo [ERROR] Build failed
     pause
     exit /b 1
 )
 
-:: Done
-echo [3/3] 打包完成！
+echo [3/3] Done!
 echo.
-echo 输出文件: dist\Memoria.exe
+echo Output: dist\Memoria.exe
 echo.
-echo 使用说明:
-echo   1. 将 dist\Memoria.exe 复制到任意文件夹
-echo   2. 双击运行即可
-echo   3. 数据保存在 exe 同目录的 data\ 文件夹中
+echo Usage:
+echo   1. Copy dist\Memoria.exe to any folder
+echo   2. Double-click to run
+echo   3. Data saved in data\ folder next to the exe
 echo.
 pause
