@@ -41,9 +41,37 @@ class ProactiveEngine:
                 print(f"[ProactiveEngine] Error: {e}")
                 await asyncio.sleep(60)
 
+    def _is_user_responsive(self) -> bool:
+        """Check if user has been responding to recent proactive messages.
+        Returns False if last 2+ proactive messages had no user response."""
+        db = get_db()
+        rows = db.execute(
+            "SELECT id, created_at FROM proactive_log WHERE was_sent=1 "
+            "ORDER BY created_at DESC LIMIT 3"
+        ).fetchall()
+        if len(rows) < 2:
+            return True  # Not enough data, assume responsive
+
+        unanswered = 0
+        for row in rows:
+            proactive_time = row["created_at"]
+            # Check if there's a user message after this proactive message
+            user_msg = db.execute(
+                "SELECT id FROM messages WHERE role='user' AND created_at > ? LIMIT 1",
+                (proactive_time,)
+            ).fetchone()
+            if not user_msg:
+                unanswered += 1
+
+        return unanswered < 2  # Silent if 2+ consecutive unanswered
+
     async def _check_triggers(self):
         config = self._get_config()
         if not config.get("enabled"):
+            return
+
+        # Silent strategy: don't spam if user isn't responding
+        if not self._is_user_responsive():
             return
 
         now = datetime.now()

@@ -121,8 +121,14 @@ class SettingsModal {
         const model = document.getElementById('sModel').value.trim();
         const temp = parseFloat(document.getElementById('sTemp').value) || 0.8;
 
-        if (!url || !key || !model) {
-            this.app.toast('请填写 API 地址、Key 和模型名称');
+        if (!url || !model) {
+            this.app.toast('请填写 API 地址和模型名称');
+            return;
+        }
+        // If key is masked (contains asterisks), don't send it — backend keeps the original
+        const isMasked = key.includes('*');
+        if (!isMasked && !key) {
+            this.app.toast('请填写 API Key');
             return;
         }
 
@@ -130,7 +136,7 @@ class SettingsModal {
             await API.createConfig({
                 name: 'default',
                 base_url: url,
-                api_key: key,
+                api_key: isMasked ? undefined : key,
                 model: model,
                 temperature: temp,
                 max_tokens: 2048

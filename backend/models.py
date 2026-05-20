@@ -7,7 +7,7 @@ from datetime import datetime
 class ApiConfigCreate(BaseModel):
     name: str = "default"
     base_url: str
-    api_key: str
+    api_key: Optional[str] = None
     model: str
     temperature: float = 0.8
     max_tokens: int = 2048

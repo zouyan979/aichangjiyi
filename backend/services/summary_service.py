@@ -46,7 +46,14 @@ class SummaryService:
         prompt = f"""你是一个记忆管理系统。分析以下对话片段，提取关键信息。
 
 要求返回JSON格式（只输出JSON，不要其他内容）：
-{{"summary":"150字以内的对话摘要","topics":["话题1","话题2"],"key_facts":["重要事实"],"mood":"对话氛围","user_insights":{{"interests":[],"traits":[],"facts":[],"preferences":[],"goals":[]}}}}
+{{"summary":"150字以内的对话摘要","topics":["话题1","话题2"],"key_facts":["重要事实"],"mood":"对话氛围","user_insights":{{"interests":[{{"item":"兴趣名","confidence":0.9}}],"traits":[{{"item":"性格特征","confidence":0.8}}],"facts":[{{"item":"事实","confidence":0.95}}],"preferences":[{{"item":"偏好","confidence":0.7}}],"goals":[{{"item":"目标","confidence":0.6}}]}}}}
+
+置信度说明：
+- 0.9-1.0：用户明确陈述的事实（如"我生日是X月X日"）
+- 0.7-0.9：用户多次提及或强烈暗示的（如反复提到喜欢某事物）
+- 0.5-0.7：AI推断的，但证据不够充分（如仅提过一次的兴趣）
+- 0.3-0.5：非常不确定的推测
+只提取有把握的信息，不确定的不要提取。
 
 当前用户画像：{profile_json}
 对话内容：{conv_text}"""

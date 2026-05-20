@@ -20,6 +20,13 @@ def _load_active_config():
         })
 
 
+def _mask_key(key: str) -> str:
+    """Mask API key, showing only last 4 characters."""
+    if not key or len(key) <= 8:
+        return "****"
+    return "*" * (len(key) - 4) + key[-4:]
+
+
 @router.get("/api")
 def list_configs():
     db = get_db()
@@ -28,6 +35,7 @@ def list_configs():
     for r in rows:
         d = dict(r)
         d["is_active"] = bool(d["is_active"])
+        d["api_key"] = _mask_key(d["api_key"])
         result.append(d)
     return result
 
@@ -35,10 +43,15 @@ def list_configs():
 @router.post("/api")
 def create_config(config: ApiConfigCreate):
     db = get_db()
+    # If api_key not provided, keep the existing active config's key
+    api_key = config.api_key
+    if not api_key:
+        row = db.execute("SELECT api_key FROM api_configs WHERE is_active=1 LIMIT 1").fetchone()
+        api_key = row["api_key"] if row else ""
     cursor = db.execute(
         "INSERT INTO api_configs (name, base_url, api_key, model, temperature, max_tokens, is_active) "
         "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (config.name, config.base_url, config.api_key, config.model,
+        (config.name, config.base_url, api_key, config.model,
          config.temperature, config.max_tokens, 1)
     )
     # Deactivate others

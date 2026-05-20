@@ -39,17 +39,24 @@ class MemoryService:
                 (category, content, source, confidence)
             )
             db.commit()
-            # Trim excess items
-            count = db.execute("SELECT COUNT(*) FROM user_profiles WHERE category=?", (category,)).fetchone()[0]
-            if count > MAX_PROFILE_ITEMS_PER_CAT:
-                db.execute(
-                    "DELETE FROM user_profiles WHERE category=? AND id NOT IN "
-                    "(SELECT id FROM user_profiles WHERE category=? ORDER BY updated_at DESC LIMIT ?)",
-                    (category, category, MAX_PROFILE_ITEMS_PER_CAT)
-                )
-                db.commit()
         except Exception:
-            pass  # UNIQUE constraint means duplicate, skip
+            # UNIQUE constraint means duplicate — update confidence and timestamp
+            db.execute(
+                "UPDATE user_profiles SET confidence=MAX(confidence, ?), "
+                "updated_at=datetime('now','localtime'), source=? "
+                "WHERE category=? AND content=?",
+                (confidence, source, category, content)
+            )
+            db.commit()
+        # Trim excess items
+        count = db.execute("SELECT COUNT(*) FROM user_profiles WHERE category=?", (category,)).fetchone()[0]
+        if count > MAX_PROFILE_ITEMS_PER_CAT:
+            db.execute(
+                "DELETE FROM user_profiles WHERE category=? AND id NOT IN "
+                "(SELECT id FROM user_profiles WHERE category=? ORDER BY updated_at DESC LIMIT ?)",
+                (category, category, MAX_PROFILE_ITEMS_PER_CAT)
+            )
+            db.commit()
 
     def delete_profile_item(self, item_id: int):
         db = get_db()
@@ -63,7 +70,14 @@ class MemoryService:
             if not isinstance(items, list):
                 continue
             for item in items:
-                if item and isinstance(item, str) and len(item.strip()) > 0:
+                if isinstance(item, dict):
+                    # New format: {"item": "...", "confidence": 0.9}
+                    text = item.get("item", "").strip()
+                    confidence = item.get("confidence", 0.7)
+                    if text:
+                        self.add_profile_item(category, text, source, confidence)
+                elif item and isinstance(item, str) and len(item.strip()) > 0:
+                    # Legacy format: plain string
                     self.add_profile_item(category, item.strip(), source)
 
     # ---- Core Facts ----

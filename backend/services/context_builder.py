@@ -117,6 +117,11 @@ class ContextBuilder:
         if not profile:
             return "（尚无了解）"
 
+        # Get detailed profile with confidence for filtering
+        detailed = memory_service.get_profile()
+        from datetime import datetime, timedelta
+        stale_threshold = datetime.now() - timedelta(days=30)
+
         lines = []
         used = 0
 
@@ -132,13 +137,28 @@ class ContextBuilder:
             if not items:
                 continue
             label = labels.get(cat, cat)
+
             if cat == "name":
                 line = f"姓名: {items[0]}"
             else:
-                display = items[:8]  # limit items per category
+                # Filter: only include items with confidence >= 0.5 and mentioned within 30 days
+                detailed_items = detailed.get(cat, [])
+                filtered = []
+                for detail in detailed_items:
+                    conf = detail.get("confidence", 0.8)
+                    updated = detail.get("updated_at", "")
+                    try:
+                        last_mention = datetime.strptime(updated, "%Y-%m-%d %H:%M:%S")
+                    except (ValueError, TypeError):
+                        last_mention = datetime.now()
+                    if conf >= 0.5 and last_mention >= stale_threshold:
+                        filtered.append(detail["content"])
+                if not filtered:
+                    continue
+                display = filtered[:8]
                 line = f"{label}: {'、'.join(display)}"
-                if len(items) > 8:
-                    line += f" 等{len(items)}项"
+                if len(filtered) > 8:
+                    line += f" 等{len(filtered)}项"
             tokens = estimate_tokens(line)
             if used + tokens > budget:
                 break
