@@ -1,10 +1,11 @@
 #!/bin/bash
 # Memoria 宝塔一键部署脚本
-# 使用方法：上传项目到 /www/wwwroot/memoria，然后运行 bash deploy/setup.sh
+# 使用方法：进入项目目录，运行 bash deploy/setup.sh
 
 set -e
 
-APP_DIR="/www/wwwroot/memoria"
+# 自动检测项目目录（脚本所在目录的上一级）
+APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 APP_USER="www"
 
 echo "=========================================="
