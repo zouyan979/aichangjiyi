@@ -1,11 +1,18 @@
 import os
 import sys
+import logging
+from .logger import setup_logging
+
 if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
     try:
         sys.stdout.reconfigure(encoding='utf-8')
         sys.stderr.reconfigure(encoding='utf-8')
     except Exception:
         pass
+
+setup_logging(level=logging.INFO)
+log = logging.getLogger("memoria")
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

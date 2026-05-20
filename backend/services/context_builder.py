@@ -1,9 +1,12 @@
 from __future__ import annotations
+import logging
 from .persona_service import persona_service
 from .memory_service import memory_service
 from .relevance_engine import relevance_engine
 from .token_estimator import estimate_tokens, estimate_messages_tokens
 from ..config import DEFAULT_TOKEN_BUDGET
+
+log = logging.getLogger("memoria.context")
 
 
 class ContextBuilder:
@@ -24,6 +27,15 @@ class ContextBuilder:
             role = m["role"]
             if role in ("user", "assistant"):
                 messages.append({"role": role, "content": m["content"]})
+
+        # Log token distribution
+        sys_tokens = estimate_tokens(system_prompt)
+        msg_tokens = sum(estimate_tokens(m["content"]) for m in messages if m["role"] != "system")
+        total = estimate_messages_tokens(messages)
+        log.info(
+            "Context built: system=%d tokens, msgs=%d tokens (%d messages), total=%d, budget=%d",
+            sys_tokens, msg_tokens, len(messages) - 1, total, token_budget
+        )
 
         return messages
 
@@ -55,8 +67,9 @@ class ContextBuilder:
         if profile_text:
             parts.append(f"\n关于用户：\n{profile_text}")
 
-        # 4. Relevant summaries
-        summaries = memory_service.get_all_summaries()
+        # 4. Relevant summaries (filter out low confidence)
+        summaries = [s for s in memory_service.get_all_summaries()
+                     if s.get("confidence", 0.8) >= 0.5]
         if summaries:
             selected = relevance_engine.select_within_budget(
                 user_message, summaries, summary_budget

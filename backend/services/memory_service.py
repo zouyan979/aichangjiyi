@@ -206,14 +206,15 @@ class MemoryService:
         return results
 
     def save_summary(self, conversation_id: int, summary: str, topics: list,
-                     mood: str, key_facts: list, message_range: str, token_estimate: int):
+                     mood: str, key_facts: list, message_range: str,
+                     token_estimate: int, confidence: float = 0.8):
         db = get_db()
         db.execute(
             "INSERT INTO conversation_summaries "
-            "(conversation_id, summary, topics, mood, key_facts, message_range, token_estimate) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "(conversation_id, summary, topics, mood, key_facts, message_range, token_estimate, confidence) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (conversation_id, summary, json.dumps(topics, ensure_ascii=False),
-             mood, json.dumps(key_facts, ensure_ascii=False), message_range, token_estimate)
+             mood, json.dumps(key_facts, ensure_ascii=False), message_range, token_estimate, confidence)
         )
         db.commit()
 

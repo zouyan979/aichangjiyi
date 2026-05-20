@@ -1,6 +1,7 @@
 from __future__ import annotations
 import asyncio
 import json
+import logging
 import re
 from datetime import datetime, timedelta
 from ..database import get_db
@@ -9,6 +10,8 @@ from ..config import (PROACTIVE_CHECK_INTERVAL, PROACTIVE_COOLDOWN,
 from .memory_service import memory_service
 from .persona_service import persona_service
 from .llm_service import llm_service
+
+log = logging.getLogger("memoria.proactive")
 
 
 class ProactiveEngine:
@@ -38,7 +41,7 @@ class ProactiveEngine:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                print(f"[ProactiveEngine] Error: {e}")
+                log.error("Proactive loop error: %s", e, exc_info=True)
                 await asyncio.sleep(60)
 
     def _is_user_responsive(self) -> bool:
@@ -183,7 +186,7 @@ class ProactiveEngine:
                 }
 
         except Exception as e:
-            print(f"[ProactiveEngine] Send error: {e}")
+            log.error("Proactive send error: %s", e, exc_info=True)
 
     def get_pending(self) -> dict | None:
         msg = self._pending_message

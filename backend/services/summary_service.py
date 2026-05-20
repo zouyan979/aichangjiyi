@@ -1,9 +1,12 @@
 from __future__ import annotations
 import json
+import logging
 from .memory_service import memory_service
 from .llm_service import llm_service
 from .token_estimator import estimate_tokens
 from ..config import DEFAULT_SUMMARIZE_AT, DEFAULT_SUMMARY_BATCH, META_SUMMARY_THRESHOLD
+
+log = logging.getLogger("memoria.summary")
 
 
 class SummaryService:
@@ -46,12 +49,18 @@ class SummaryService:
         prompt = f"""你是一个记忆管理系统。分析以下对话片段，提取关键信息。
 
 要求返回JSON格式（只输出JSON，不要其他内容）：
-{{"summary":"150字以内的对话摘要","topics":["话题1","话题2"],"key_facts":["重要事实"],"mood":"对话氛围","user_insights":{{"interests":[{{"item":"兴趣名","confidence":0.9}}],"traits":[{{"item":"性格特征","confidence":0.8}}],"facts":[{{"item":"事实","confidence":0.95}}],"preferences":[{{"item":"偏好","confidence":0.7}}],"goals":[{{"item":"目标","confidence":0.6}}]}}}}
+{{"summary":"150字以内的对话摘要","summary_confidence":0.85,"topics":["话题1","话题2"],"key_facts":["重要事实"],"mood":"对话氛围","user_insights":{{"interests":[{{"item":"兴趣名","confidence":0.9}}],"traits":[{{"item":"性格特征","confidence":0.8}}],"facts":[{{"item":"事实","confidence":0.95}}],"preferences":[{{"item":"偏好","confidence":0.7}}],"goals":[{{"item":"目标","confidence":0.6}}]}}}}
 
-置信度说明：
+summary_confidence 说明（你对这段摘要整体准确性的自评）：
+- 0.9-1.0：对话内容明确，摘要高度可靠
+- 0.7-0.9：对话较清晰，摘要基本可靠
+- 0.5-0.7：对话含糊或多义，摘要可能有偏差
+- 0.3-0.5：对话碎片化或矛盾，摘要不可靠
+
+user_insights 置信度说明：
 - 0.9-1.0：用户明确陈述的事实（如"我生日是X月X日"）
-- 0.7-0.9：用户多次提及或强烈暗示的（如反复提到喜欢某事物）
-- 0.5-0.7：AI推断的，但证据不够充分（如仅提过一次的兴趣）
+- 0.7-0.9：用户多次提及或强烈暗示的
+- 0.5-0.7：AI推断的，证据不够充分
 - 0.3-0.5：非常不确定的推测
 只提取有把握的信息，不确定的不要提取。
 
@@ -65,9 +74,9 @@ class SummaryService:
                 max_tokens=2048
             )
 
-            print(f"[SummaryService] generate result length: {len(result)}")
+            log.info("Summary generated, length=%d", len(result))
             if not result.strip():
-                print("[SummaryService] WARNING: generate returned empty result")
+                log.warning("generate returned empty result")
                 return
 
             # Parse response
@@ -91,6 +100,7 @@ class SummaryService:
                 }
 
             # Save summary
+            summary_confidence = data.get("summary_confidence", 0.8)
             msg_range = f"{batch[0]['id']}..{batch[-1]['id']}"
             token_est = estimate_tokens(data.get("summary", ""))
             memory_service.save_summary(
@@ -100,28 +110,32 @@ class SummaryService:
                 data.get("mood", ""),
                 data.get("key_facts", []),
                 msg_range,
-                token_est
+                token_est,
+                summary_confidence
             )
+            log.info("Summary saved: confidence=%.2f, msgs=%s", summary_confidence, msg_range)
 
             # Mark messages as summarized
             msg_ids = [m["id"] for m in batch]
             memory_service.mark_summarized(msg_ids)
 
-            # Extract user insights
-            insights = data.get("user_insights", {})
-            if insights:
-                memory_service.update_profile_batch(insights, source="auto")
+            # Only extract insights and promote facts if confidence is high enough
+            if summary_confidence >= 0.5:
+                insights = data.get("user_insights", {})
+                if insights:
+                    memory_service.update_profile_batch(insights, source="auto")
 
-            # Promote key facts to core facts
-            for fact in data.get("key_facts", []):
-                if fact and len(fact) > 5:
-                    memory_service.add_core_fact(fact, priority=3, category="extracted")
+                for fact in data.get("key_facts", []):
+                    if fact and len(fact) > 5:
+                        memory_service.add_core_fact(fact, priority=3, category="extracted")
+            else:
+                log.info("Low confidence (%.2f), skipping insight extraction and fact promotion", summary_confidence)
 
             # Check if meta-summarization needed
             await self._check_meta_summarize()
 
         except Exception as e:
-            print(f"[SummaryService] Error: {e}")
+            log.error("Summarize error: %s", e, exc_info=True)
 
     async def _check_meta_summarize(self):
         all_summaries = memory_service.get_all_summaries()
@@ -169,7 +183,7 @@ class SummaryService:
                 estimate_tokens(result)
             )
         except Exception as e:
-            print(f"[SummaryService] Meta-summarize error: {e}")
+            log.error("Meta-summarize error: %s", e, exc_info=True)
 
     async def force_summarize(self, conversation_id: int):
         await self.summarize_batch(conversation_id, DEFAULT_SUMMARY_BATCH)

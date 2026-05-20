@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json
 import asyncio
+import logging
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from ..models import ChatRequest
@@ -11,6 +12,8 @@ from ..services.summary_service import summary_service
 from ..services.persona_service import persona_service
 from ..services.token_estimator import estimate_tokens
 from ..services.proactive_engine import proactive_engine
+
+log = logging.getLogger("memoria.chat")
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -78,12 +81,12 @@ async def _post_chat_tasks(conversation_id: int, user_msg: str, ai_msg: str):
     try:
         # Auto-summarize check
         unsum_count = memory_service.count_unsummarized(conversation_id)
-        print(f"[PostChatTasks] Unsummarized messages: {unsum_count}")
+        log.info("Unsummarized messages: %d", unsum_count)
         await summary_service.check_and_summarize(conversation_id)
 
         # Check persona growth (every 2 summaries)
         summaries = memory_service.get_summaries(conversation_id, limit=10)
-        print(f"[PostChatTasks] Total summaries: {len(summaries)}")
+        log.info("Total summaries: %d", len(summaries))
         if len(summaries) > 0 and len(summaries) % 2 == 0:
             await _check_persona_growth(summaries)
 
@@ -91,7 +94,7 @@ async def _post_chat_tasks(conversation_id: int, user_msg: str, ai_msg: str):
         proactive_engine.extract_events([{"role": "user", "content": user_msg}])
 
     except Exception as e:
-        print(f"[PostChatTasks] Error: {e}")
+        log.error("PostChatTasks error: %s", e, exc_info=True)
 
 
 async def _check_persona_growth(summaries: list):
@@ -151,4 +154,4 @@ async def _check_persona_growth(summaries: list):
             persona_service.add_growth_event(data["growth_event"])
 
     except Exception as e:
-        print(f"[PersonaGrowth] Error: {e}")
+        log.error("PersonaGrowth error: %s", e, exc_info=True)
