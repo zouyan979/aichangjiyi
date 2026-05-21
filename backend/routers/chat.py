@@ -13,6 +13,7 @@ from ..services.persona_service import persona_service
 from ..services.token_estimator import estimate_tokens
 from ..services.proactive_engine import proactive_engine
 from ..services.search_service import search_service
+from ..services.weather_service import weather_service
 
 log = logging.getLogger("memoria.chat")
 
@@ -108,6 +109,9 @@ async def _post_chat_tasks(conversation_id: int, user_msg: str, ai_msg: str):
         # Extract events for proactive messages
         proactive_engine.extract_events([{"role": "user", "content": user_msg}])
 
+        # Detect user's city from conversation
+        _detect_city(user_msg)
+
     except Exception as e:
         log.error("PostChatTasks error: %s", e, exc_info=True)
 
@@ -170,3 +174,48 @@ async def _check_persona_growth(summaries: list):
 
     except Exception as e:
         log.error("PersonaGrowth error: %s", e, exc_info=True)
+
+
+# City detection: Chinese city name -> English name for wttr.in
+_CITY_MAP = {
+    "北京": "Beijing", "上海": "Shanghai", "广州": "Guangzhou", "深圳": "Shenzhen",
+    "杭州": "Hangzhou", "成都": "Chengdu", "武汉": "Wuhan", "南京": "Nanjing",
+    "重庆": "Chongqing", "西安": "Xian", "天津": "Tianjin", "苏州": "Suzhou",
+    "长沙": "Changsha", "郑州": "Zhengzhou", "东莞": "Dongguan", "青岛": "Qingdao",
+    "沈阳": "Shenyang", "宁波": "Ningbo", "昆明": "Kunming", "大连": "Dalian",
+    "厦门": "Xiamen", "合肥": "Hefei", "福州": "Fuzhou", "济南": "Jinan",
+    "温州": "Wenzhou", "石家庄": "Shijiazhuang", "南宁": "Nanning", "哈尔滨": "Harbin",
+    "太原": "Taiyuan", "南昌": "Nanchang", "贵阳": "Guiyang", "兰州": "Lanzhou",
+    "海口": "Haikou", "银川": "Yinchuan", "西宁": "Xining", "拉萨": "Lhasa",
+    "呼和浩特": "Hohhet", "乌鲁木齐": "Urumqi", "珠海": "Zhuhai", "佛山": "Foshan",
+    "无锡": "Wuxi", "烟台": "Yantai", "泉州": "Quanzhou", "惠州": "Huizhou",
+    "常州": "Changzhou", "中山": "Zhongshan", "嘉兴": "Jiaxing", "南通": "Nantong",
+    "金华": "Jinhua", "徐州": "Xuzhou", "台州": "Taizhou", "三亚": "Sanya",
+    "香港": "Hong Kong", "澳门": "Macau", "台北": "Taipei",
+}
+
+_CITY_PATTERNS = ["我在", "我住在", "我来到", "我在的", "我在这边", "我现在在",
+                  "我这边是", "坐标", "所在地", "我在的城市"]
+
+
+def _detect_city(user_msg: str):
+    """Auto-detect user's city from conversation and update weather service."""
+    current_city = weather_service.get_city()
+    if current_city:
+        return  # User already set a city, don't override
+
+    for city_cn, city_en in _CITY_MAP.items():
+        if city_cn in user_msg:
+            # Check if it's near a location keyword
+            for pattern in _CITY_PATTERNS:
+                if pattern in user_msg:
+                    idx = user_msg.index(pattern)
+                    if city_cn in user_msg[idx:idx + len(pattern) + 6]:
+                        weather_service.set_city(city_en)
+                        log.info("Auto-detected city: %s -> %s", city_cn, city_en)
+                        return
+            # Also match "XX人" or "家在XX"
+            if f"{city_cn}人" in user_msg or f"家在{city_cn}" in user_msg:
+                weather_service.set_city(city_en)
+                log.info("Auto-detected city from origin: %s -> %s", city_cn, city_en)
+                return
