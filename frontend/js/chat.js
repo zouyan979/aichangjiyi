@@ -202,19 +202,16 @@ class ChatUI {
     }
 
     _filterCode(txt) {
-        // Check if custom rules forbid code output
+        // Check if custom rules explicitly allow code output
         const rules = (this.app.persona?.personaData?.custom_rules || '').toLowerCase();
-        const codeKeywords = ['代码', 'code', '代码块', '编程', '程序'];
-        const forbids = codeKeywords.some(k => rules.includes(k)) &&
-            ['不可以', '不能', '不要', '禁止', '不允许', '不得', 'cannot', 'forbidden', 'no code', 'do not'].some(w => rules.includes(w));
-        if (!forbids) return txt;
+        const allowKeywords = ['可以输出代码', '允许代码', '可以显示代码', '代码可以', 'allow code', 'show code'];
+        const explicitlyAllowed = allowKeywords.some(k => rules.includes(k));
+        if (explicitlyAllowed) return txt;
 
-        // Strip fenced code blocks (```...```) — complete
-        let filtered = txt.replace(/```[\s\S]*?```/g, '\n[代码已根据用户设定过滤]\n');
+        // Default: strip fenced code blocks (```...```)
+        let filtered = txt.replace(/```[\s\S]*?```/g, '\n[代码已过滤]\n');
         // Handle incomplete code block during streaming (opening ``` without closing)
         filtered = filtered.replace(/```[\s\S]*$/, '\n[代码生成中...]');
-        // Strip inline code (`...`)
-        filtered = filtered.replace(/`[^`\n]+`/g, '[代码已过滤]');
         return filtered;
     }
 

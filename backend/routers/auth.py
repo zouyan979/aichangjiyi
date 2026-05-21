@@ -39,6 +39,12 @@ def _cleanup_tokens():
 
 
 def is_localhost(request: Request) -> bool:
+    # Check X-Forwarded-For first (behind reverse proxy like Nginx)
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        # First IP in the chain is the real client
+        real_ip = forwarded.split(",")[0].strip()
+        return real_ip in ("127.0.0.1", "::1", "localhost")
     host = request.client.host if request.client else ""
     return host in ("127.0.0.1", "::1", "localhost")
 

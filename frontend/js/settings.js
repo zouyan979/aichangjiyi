@@ -4,6 +4,7 @@ class SettingsModal {
         this.$modal = document.getElementById('setModal');
         this.$tRes = document.getElementById('tRes');
         this.$tglPro = document.getElementById('tglPro');
+        this._originalKey = '';  // track the masked key as loaded
         this._bind();
     }
 
@@ -64,6 +65,7 @@ class SettingsModal {
             if (active) {
                 document.getElementById('sUrl').value = active.base_url || '';
                 document.getElementById('sKey').value = active.api_key || '';
+                this._originalKey = active.api_key || '';
                 document.getElementById('sModel').value = active.model || '';
                 document.getElementById('sTemp').value = active.temperature || 0.8;
             }
@@ -125,9 +127,9 @@ class SettingsModal {
             this.app.toast('请填写 API 地址和模型名称');
             return;
         }
-        // If key is masked (contains asterisks), don't send it — backend keeps the original
-        const isMasked = key.includes('*');
-        if (!isMasked && !key) {
+        // If key unchanged from the masked original, don't send it — backend keeps the original
+        const keyUnchanged = key === this._originalKey;
+        if (!keyUnchanged && !key) {
             this.app.toast('请填写 API Key');
             return;
         }
@@ -136,7 +138,7 @@ class SettingsModal {
             await API.createConfig({
                 name: 'default',
                 base_url: url,
-                api_key: isMasked ? undefined : key,
+                api_key: keyUnchanged ? undefined : key,
                 model: model,
                 temperature: temp,
                 max_tokens: 2048

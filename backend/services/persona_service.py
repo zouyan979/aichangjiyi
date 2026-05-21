@@ -93,7 +93,8 @@ class PersonaService:
         base, style, bg, rel = _default_persona()
         db.execute(
             "UPDATE ai_persona SET name='Memoria', base_persona=?, speaking_style=?, background=?, "
-            "relationship=?, emotion_state='calm', growth_log='[]', version=1, updated_at=datetime('now','localtime') WHERE id=1",
+            "relationship=?, emotion_state='calm', custom_rules='', relationship_stage='acquaintance', "
+            "growth_log='[]', version=1, updated_at=datetime('now','localtime') WHERE id=1",
             (base, style, bg, rel)
         )
         db.commit()

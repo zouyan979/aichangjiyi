@@ -29,9 +29,11 @@ if [ ! -d "venv" ]; then
 fi
 source venv/bin/activate
 
-# 2. 安装依赖
+# 2. 升级pip并安装依赖
+echo "[2/5] 升级pip..."
+pip install --upgrade pip -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com --quiet
 echo "[2/5] 安装依赖..."
-pip install -r backend/requirements.txt gunicorn --quiet
+pip install -r backend/requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com --quiet
 
 # 3. 创建数据目录
 echo "[3/5] 初始化数据目录..."

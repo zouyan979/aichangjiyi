@@ -125,6 +125,7 @@ class PersonaUpdate(BaseModel):
     background: Optional[str] = None
     relationship: Optional[str] = None
     emotion_state: Optional[str] = None
+    custom_rules: Optional[str] = None
 
 
 class PersonaOut(BaseModel):

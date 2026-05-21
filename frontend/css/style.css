@@ -104,7 +104,7 @@ code{background:var(--surface2);padding:1px 5px;border-radius:3px;font-family:va
 .inArea{flex-shrink:0;padding:12px 24px 20px;border-top:1px solid var(--border);background:var(--bg)}
 .inWrap{display:flex;align-items:flex-end;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:8px 8px 8px 16px;transition:border-color .2s}
 .inWrap:focus-within{border-color:var(--accent)}
-.inWrap textarea{flex:1;font-size:.9rem;line-height:1.6;max-height:150px;padding:4px 0}
+.inWrap textarea{flex:1;font-size:.9rem;line-height:1.6;max-height:150px;padding:4px 0;touch-action:manipulation}
 .inWrap textarea::placeholder{color:var(--textM)}
 .sBtn{width:36px;height:36px;border-radius:var(--rs);background:var(--accent);display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0}
 .sBtn:hover{background:var(--accentH);transform:scale(1.05)}
@@ -275,7 +275,7 @@ textarea.fi{min-height:80px;resize:vertical;font-family:var(--fb)}
   .ib svg{width:16px;height:16px}
   .chat{padding:0 16px}
   .inArea{padding:10px 16px 16px}
-  .inWrap textarea{font-size:.9rem}
+  .inWrap textarea{font-size:16px}
   .pnl{width:min(380px,85vw)}
   .modalBox{width:min(480px,94vw)}
   .fRow{flex-direction:column;gap:10px}
