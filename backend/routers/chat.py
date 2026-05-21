@@ -192,6 +192,21 @@ _CITY_MAP = {
     "常州": "Changzhou", "中山": "Zhongshan", "嘉兴": "Jiaxing", "南通": "Nantong",
     "金华": "Jinhua", "徐州": "Xuzhou", "台州": "Taizhou", "三亚": "Sanya",
     "香港": "Hong Kong", "澳门": "Macau", "台北": "Taipei",
+    # 安徽
+    "宿州": "Suzhou+Anhui", "芜湖": "Wuhu", "蚌埠": "Bengbu", "安庆": "Anqing",
+    "阜阳": "Fuyang", "六安": "Liu+an", "淮南": "Huainan", "淮北": "Huaibei",
+    "铜陵": "Tongling", "黄山": "Huangshan", "滁州": "Chuzhou", "亳州": "Bozhou",
+    "池州": "Chizhou", "宣城": "Xuancheng",
+    # 山西
+    "大同": "Datong", "长治": "Changzhi", "临汾": "Linfen", "运城": "Yuncheng",
+    # 河北
+    "唐山": "Tangshan", "保定": "Baoding", "邯郸": "Handan", "廊坊": "Langfang",
+    # 江西
+    "九江": "Jiujiang", "赣州": "Ganzhou", "景德镇": "Jingdezhen",
+    # 广西
+    "桂林": "Guilin", "柳州": "Liuzhou", "北海": "Beihai",
+    # 其他
+    "丽江": "Lijiang", "大理": "Dali", "三亚": "Sanya", "敦煌": "Dunhuang",
 }
 
 _CITY_PATTERNS = ["我在", "我住在", "我来到", "我在的", "我在这边", "我现在在",

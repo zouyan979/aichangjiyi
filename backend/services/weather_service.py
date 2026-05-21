@@ -8,7 +8,7 @@ from ..database import get_db
 
 log = logging.getLogger("memoria.weather")
 
-WTTR_URL = "https://wttr.in"
+WTTR_URL = "http://wttr.in"
 CACHE_TTL = 1800  # 30 minutes
 REQUEST_TIMEOUT = 10
 
@@ -47,7 +47,7 @@ class WeatherService:
             try:
                 resp = httpx.get(
                     attempt_url,
-                    params={"format": "3", "lang": "zh"},
+                    params={"format": "3", "lang": "zh", "m": ""},
                     timeout=REQUEST_TIMEOUT,
                     headers={"User-Agent": "curl/8.0"},
                     follow_redirects=True
@@ -69,9 +69,8 @@ class WeatherService:
         urls = []
         if city:
             urls.append(f"{WTTR_URL}/{city}")
-        # Always include auto-detect as fallback
-        if not city or city not in ("",):
-            urls.append(WTTR_URL)
+        # Auto-detect from IP as fallback
+        urls.append(WTTR_URL)
         return urls
 
     def get_weather_summary(self) -> str | None:
