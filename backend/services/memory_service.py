@@ -316,6 +316,39 @@ class MemoryService:
                     f.get("category", "general"),
                     f.get("is_pinned", False)
                 )
+        if "summaries" in data:
+            for s in data["summaries"]:
+                topics = s.get("topics", [])
+                if isinstance(topics, str):
+                    try:
+                        topics = json.loads(topics)
+                    except (json.JSONDecodeError, TypeError):
+                        topics = [topics]
+                key_facts = s.get("key_facts", [])
+                if isinstance(key_facts, str):
+                    try:
+                        key_facts = json.loads(key_facts)
+                    except (json.JSONDecodeError, TypeError):
+                        key_facts = [key_facts]
+                self.save_summary(
+                    s.get("conversation_id", 1),
+                    s.get("summary", ""),
+                    topics,
+                    s.get("mood", ""),
+                    key_facts,
+                    s.get("message_range", ""),
+                    s.get("token_estimate", 0),
+                    s.get("confidence", 0.8)
+                )
+        if "messages" in data:
+            for m in data["messages"]:
+                self.save_message(
+                    m.get("conversation_id", 1),
+                    m.get("role", "user"),
+                    m.get("content", ""),
+                    m.get("token_count", 0),
+                    bool(m.get("is_proactive", False))
+                )
         db.commit()
 
     def clear_all(self):

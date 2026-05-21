@@ -41,26 +41,38 @@ class WeatherService:
             self._cache = None
 
         city = self.get_city()
-        url = f"{WTTR_URL}/{city}" if city else WTTR_URL
 
-        try:
-            resp = httpx.get(
-                url,
-                params={"format": "%l:+%c+%t+%h+%w+%S+%s", "lang": "zh"},
-                timeout=REQUEST_TIMEOUT,
-                headers={"User-Agent": "curl/8.0"},
-                follow_redirects=True
-            )
-            resp.raise_for_status()
-            text = resp.text.strip()
-            if text and "Unknown" not in text:
-                self._cache = (time.time(), text)
-                log.info("Weather: %s", text)
-                return text
-        except Exception as e:
-            log.warning("Weather fetch failed: %s", e)
+        # Try format=3 first (simplest, most reliable)
+        for attempt_url in self._build_urls(city):
+            try:
+                resp = httpx.get(
+                    attempt_url,
+                    params={"format": "3", "lang": "zh"},
+                    timeout=REQUEST_TIMEOUT,
+                    headers={"User-Agent": "curl/8.0"},
+                    follow_redirects=True
+                )
+                resp.raise_for_status()
+                text = resp.text.strip()
+                if text and "Unknown" not in text and len(text) > 3:
+                    self._cache = (time.time(), text)
+                    log.info("Weather: %s", text)
+                    return text
+            except Exception as e:
+                log.warning("Weather fetch failed (%s): %s", attempt_url, e)
+                continue
 
         return None
+
+    def _build_urls(self, city: str) -> list[str]:
+        """Build fallback URLs for weather fetching."""
+        urls = []
+        if city:
+            urls.append(f"{WTTR_URL}/{city}")
+        # Always include auto-detect as fallback
+        if not city or city not in ("",):
+            urls.append(WTTR_URL)
+        return urls
 
     def get_weather_summary(self) -> str | None:
         """Get a concise weather summary for proactive messages."""
