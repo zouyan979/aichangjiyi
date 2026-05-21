@@ -200,10 +200,6 @@ _CITY_PATTERNS = ["我在", "我住在", "我来到", "我在的", "我在这边
 
 def _detect_city(user_msg: str):
     """Auto-detect user's city from conversation and update weather service."""
-    current_city = weather_service.get_city()
-    if current_city:
-        return  # User already set a city, don't override
-
     for city_cn, city_en in _CITY_MAP.items():
         if city_cn in user_msg:
             # Check if it's near a location keyword
