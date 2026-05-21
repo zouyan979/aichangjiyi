@@ -14,11 +14,13 @@ class ContextBuilder:
         pass
 
     def build(self, user_message: str, conversation_id: int,
-              token_budget: int = DEFAULT_TOKEN_BUDGET) -> list[dict]:
+              token_budget: int = DEFAULT_TOKEN_BUDGET,
+              search_results: list[dict] | None = None) -> list[dict]:
         messages = []
 
         # Step 1: Build system prompt (fixed costs)
-        system_prompt = self._build_system_prompt(user_message, conversation_id, token_budget)
+        system_prompt = self._build_system_prompt(user_message, conversation_id, token_budget,
+                                                   search_results)
         messages.append({"role": "system", "content": system_prompt})
 
         # Step 2: Recent messages (already includes current user message since it's saved to DB first)
@@ -40,7 +42,8 @@ class ContextBuilder:
         return messages
 
     def _build_system_prompt(self, user_message: str, conversation_id: int,
-                             token_budget: int) -> str:
+                             token_budget: int,
+                             search_results: list[dict] | None = None) -> str:
         # Fixed budget allocation
         persona_budget = 400
         facts_budget = 250
@@ -80,6 +83,25 @@ class ContextBuilder:
                     for s in selected
                 )
                 parts.append(f"\n相关历史记忆：\n{summary_text}")
+
+        # 4.5. Web search results (if available)
+        if search_results:
+            search_text = "\n".join(
+                f"- [{r['title']}] {r['content']}" + (f" ({r['url']})" if r.get('url') else "")
+                for r in search_results
+            )
+            parts.append(f"\n以下是联网搜索到的实时信息，可作为参考：\n{search_text}")
+
+        # 4.6. Current time and weather
+        from datetime import datetime
+        now_str = datetime.now().strftime("%Y年%m月%d日 %H:%M %A")
+        time_context = f"\n当前时间：{now_str}"
+
+        from .weather_service import weather_service
+        weather = weather_service.get_weather()
+        if weather:
+            time_context += f"\n当前天气：{weather}"
+        parts.append(time_context)
 
         # 5. Rules
         parts.append("\n规则：自然地引用你对用户的了解，像老朋友一样交流。简洁有深度。不说'作为AI'。根据上下文自然回应。")

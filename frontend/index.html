@@ -141,21 +141,38 @@
           <div class="apiGuideItem" data-url="http://localhost:11434/v1/chat/completions" data-model="llama3">Ollama 本地: localhost:11434</div>
         </div>
 
-        <div class="st">主动消息</div>
+        <div class="st">联网搜索</div>
+        <div class="tgl">
+          <span class="tglL">启用联网搜索</span>
+          <div class="tglB" id="tglSearch"></div>
+        </div>
+        <div class="fg">
+          <label class="fl">Tavily API Key</label>
+          <input class="fi" id="sSearchKey" type="password" placeholder="tvly-... (可选，免费注册 tavily.com 获取)">
+          <div class="fHelp">可选。开启后 AI 可搜索更多实时信息（新闻、价格等）。</div>
+        </div>
+        <div class="fg">
+          <label class="fl">所在城市</label>
+          <input class="fi" id="sCity" placeholder="例如: Beijing, Shanghai（留空自动检测）">
+          <div class="fHelp">用于天气信息，AI 主动消息会根据天气提醒你。留空则根据 IP 自动定位。</div>
+        </div>
+
+        <div class="st">主动消息（智能模式）</div>
         <div class="tgl">
           <span class="tglL">启用主动消息</span>
           <div class="tglB" id="tglPro"></div>
         </div>
         <div class="fRow">
           <div class="fg">
-            <label class="fl">消息间隔 (分钟)</label>
-            <input class="fi" id="sInt" type="number" min="5" max="1440" value="30">
+            <label class="fl">每日上限</label>
+            <input class="fi" id="sMaxDaily" type="number" min="1" max="20" value="5">
           </div>
           <div class="fg">
             <label class="fl">无消息触发 (小时)</label>
             <input class="fi" id="sAbsence" type="number" min="1" max="72" value="4">
           </div>
         </div>
+        <div class="fHelp" style="margin-bottom:12px">AI 会根据你的聊天习惯自主判断何时发消息，不再固定时间间隔。</div>
 
         <div class="tRes" id="tRes" style="display:none"></div>
         <div class="mA">

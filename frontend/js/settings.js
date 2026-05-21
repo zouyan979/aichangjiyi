@@ -4,7 +4,9 @@ class SettingsModal {
         this.$modal = document.getElementById('setModal');
         this.$tRes = document.getElementById('tRes');
         this.$tglPro = document.getElementById('tglPro');
+        this.$tglSearch = document.getElementById('tglSearch');
         this._originalKey = '';  // track the masked key as loaded
+        this._originalSearchKey = '';
         this._bind();
     }
 
@@ -12,6 +14,7 @@ class SettingsModal {
         document.getElementById('setBg').addEventListener('click', () => this.close());
         document.getElementById('closeSet').addEventListener('click', () => this.close());
         this.$tglPro.addEventListener('click', () => this.$tglPro.classList.toggle('on'));
+        this.$tglSearch.addEventListener('click', () => this.$tglSearch.classList.toggle('on'));
         document.getElementById('btnTest').addEventListener('click', () => this._testApi());
         document.getElementById('btnSave').addEventListener('click', () => this._save());
 
@@ -49,9 +52,11 @@ class SettingsModal {
 
     async _loadCurrent() {
         try {
-            const [configs, proConfig] = await Promise.all([
+            const [configs, proConfig, searchCfg, weatherCfg] = await Promise.all([
                 API.listConfigs(),
-                API.getProactiveConfig()
+                API.getProactiveConfig(),
+                API.getSearchConfig().catch(() => ({ enabled: false, tavily_api_key: '' })),
+                API.getWeatherConfig().catch(() => ({ city: '' }))
             ]);
 
             // Clear fields first
@@ -71,8 +76,16 @@ class SettingsModal {
             }
 
             this.$tglPro.classList.toggle('on', !!proConfig.enabled);
-            document.getElementById('sInt').value = proConfig.interval_minutes || 30;
+            document.getElementById('sMaxDaily').value = proConfig.max_daily_messages || 5;
             document.getElementById('sAbsence').value = proConfig.absence_hours || 4;
+
+            // Search config
+            this.$tglSearch.classList.toggle('on', !!searchCfg.enabled);
+            document.getElementById('sSearchKey').value = searchCfg.tavily_api_key || '';
+            this._originalSearchKey = searchCfg.tavily_api_key || '';
+
+            // Weather city
+            document.getElementById('sCity').value = weatherCfg.city || '';
         } catch (e) {
             console.error('Load settings error:', e);
         }
@@ -146,9 +159,21 @@ class SettingsModal {
 
             await API.updateProactiveConfig({
                 enabled: this.$tglPro.classList.contains('on'),
-                interval_minutes: parseInt(document.getElementById('sInt').value) || 30,
+                max_daily_messages: parseInt(document.getElementById('sMaxDaily').value) || 5,
                 absence_hours: parseInt(document.getElementById('sAbsence').value) || 4
             });
+
+            // Search config
+            const searchKey = document.getElementById('sSearchKey').value.trim();
+            const searchKeyUnchanged = searchKey === this._originalSearchKey;
+            await API.updateSearchConfig({
+                enabled: this.$tglSearch.classList.contains('on'),
+                ...(searchKeyUnchanged ? {} : { tavily_api_key: searchKey })
+            });
+
+            // Weather city
+            const city = document.getElementById('sCity').value.trim();
+            await API.updateWeatherConfig(city);
 
             this.close();
             this.app.toast('设置已保存', 'ok');

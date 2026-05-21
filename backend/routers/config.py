@@ -1,8 +1,10 @@
 from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from ..database import get_db
-from ..models import ApiConfigCreate, ApiConfigUpdate, ApiConfigOut
+from ..models import ApiConfigCreate, ApiConfigUpdate, ApiConfigOut, SearchConfigUpdate
 from ..services.llm_service import llm_service
+from ..services.search_service import search_service
+from ..services.weather_service import weather_service
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
@@ -113,3 +115,35 @@ async def test_connection(config: ApiConfigCreate):
         return {"ok": True, "message": "连接成功"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/search")
+def get_search_config():
+    cfg = search_service.get_config()
+    # Mask API key
+    key = cfg.get("tavily_api_key", "")
+    cfg["tavily_api_key"] = _mask_key(key) if key else ""
+    return cfg
+
+
+@router.put("/search")
+def update_search_config(config: SearchConfigUpdate):
+    updates = config.model_dump(exclude_none=True)
+    # If key is masked (unchanged), don't overwrite
+    if "tavily_api_key" in updates:
+        key = updates["tavily_api_key"]
+        if key and "*" in key:
+            del updates["tavily_api_key"]
+    search_service.update_config(updates)
+    return {"ok": True}
+
+
+@router.get("/weather")
+def get_weather_config():
+    return {"city": weather_service.get_city()}
+
+
+@router.put("/weather")
+def update_weather_config(city: str = ""):
+    weather_service.set_city(city)
+    return {"ok": True}

@@ -12,6 +12,7 @@ from ..services.summary_service import summary_service
 from ..services.persona_service import persona_service
 from ..services.token_estimator import estimate_tokens
 from ..services.proactive_engine import proactive_engine
+from ..services.search_service import search_service
 
 log = logging.getLogger("memoria.chat")
 
@@ -29,8 +30,14 @@ async def chat(req: ChatRequest):
     user_tokens = estimate_tokens(req.content)
     msg_id = memory_service.save_message(req.conversation_id, "user", req.content, user_tokens)
 
+    # Web search (if enabled and query warrants it)
+    search_results = None
+    if search_service.should_search(req.content):
+        search_results = await search_service.search(req.content)
+
     # Build context
-    messages = context_builder.build(req.content, req.conversation_id)
+    messages = context_builder.build(req.content, req.conversation_id,
+                                     search_results=search_results)
 
     # Collect full response - shared between generator and background task
     state = {"content": "", "error": None, "done": False}

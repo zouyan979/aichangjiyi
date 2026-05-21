@@ -252,6 +252,14 @@ const API = {
     getProactiveLog(limit = 20) { return this._fetch(`/proactive/log?limit=${limit}`); },
     triggerProactive() { return this._fetch('/proactive/trigger', { method: 'POST' }); },
 
+    // ===== Search Config =====
+    getSearchConfig() { return this._fetch('/config/search'); },
+    updateSearchConfig(data) { return this._fetch('/config/search', { method: 'PUT', body: JSON.stringify(data) }); },
+
+    // ===== Weather Config =====
+    getWeatherConfig() { return this._fetch('/config/weather'); },
+    updateWeatherConfig(city) { return this._fetch(`/config/weather?city=${encodeURIComponent(city)}`, { method: 'PUT' }); },
+
     // ===== Auth =====
     authStatus() { return this._fetch('/auth/status'); },
     authLogin(password) { return this._fetch('/auth/login', { method: 'POST', body: JSON.stringify({ password }) }); },

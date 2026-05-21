@@ -140,6 +140,12 @@ class PersonaOut(BaseModel):
     version: int
 
 
+# ---- Search ----
+class SearchConfigUpdate(BaseModel):
+    enabled: Optional[bool] = None
+    tavily_api_key: Optional[str] = None
+
+
 # ---- Proactive ----
 class ProactiveConfigUpdate(BaseModel):
     enabled: Optional[bool] = None
@@ -147,6 +153,7 @@ class ProactiveConfigUpdate(BaseModel):
     morning_range: Optional[str] = None
     evening_range: Optional[str] = None
     absence_hours: Optional[int] = None
+    max_daily_messages: Optional[int] = None
 
 
 class ProactiveLogOut(BaseModel):
