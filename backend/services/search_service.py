@@ -36,10 +36,14 @@ class SearchService:
 
     def _get_api_key(self) -> str | None:
         config = self.get_config()
-        if not config.get("enabled"):
-            return None
         key = config.get("tavily_api_key", "")
-        return key if key else None
+        if not key:
+            return None
+        # Auto-enable if key is present but toggle is off
+        if not config.get("enabled"):
+            config["enabled"] = True
+            self.update_config({"enabled": True})
+        return key
 
     def _check_cache(self, query: str) -> list | None:
         cached = self._cache.get(query)
