@@ -10,6 +10,7 @@ class ChatUI {
         this.abortController = null;
         this.voiceEnabled = false;
         this._currentAudio = null;
+        this._audioCtx = null;
 
         this._bind();
         this._initVoice();
@@ -55,6 +56,14 @@ class ChatUI {
     async send(textOverride) {
         const text = textOverride || this.$inp.value.trim();
         if (!text || this.busy) return;
+
+        // Unlock audio context on user gesture
+        if (!this._audioCtx) {
+            this._audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (this._audioCtx.state === 'suspended') {
+            this._audioCtx.resume();
+        }
 
         const convId = this.app.getActiveConversation();
         if (!convId) return;
@@ -264,38 +273,55 @@ class ChatUI {
 
         API.synthesizeTTS(cleanText).then(resp => {
             if (!resp.audio) return;
-            const audio = new Audio('data:audio/wav;base64,' + resp.audio);
-            this._currentAudio = audio;
 
             const timeEl = playerEl.querySelector('.voice-time');
-            audio.addEventListener('loadedmetadata', () => {
-                const dur = Math.round(audio.duration);
-                timeEl.textContent = dur > 60 ? Math.floor(dur / 60) + ':' + String(dur % 60).padStart(2, '0') : dur + 's';
-            });
-            audio.addEventListener('ended', () => {
-                playerEl.classList.remove('playing');
-                this._currentAudio = null;
-            });
+            const audioCtx = this._audioCtx;
 
-            playerEl.addEventListener('click', () => {
-                if (audio.paused) {
-                    audio.play();
-                    playerEl.classList.add('playing');
-                } else {
-                    audio.pause();
-                    playerEl.classList.remove('playing');
-                }
-            });
+            if (audioCtx && audioCtx.state === 'running') {
+                // Use AudioContext for reliable auto-play
+                const raw = atob(resp.audio);
+                const buf = new Uint8Array(raw.length);
+                for (let i = 0; i < raw.length; i++) buf[i] = raw.charCodeAt(i);
 
-            // Auto-play
-            audio.play().then(() => {
-                playerEl.classList.add('playing');
-            }).catch(() => {
-                // Auto-play blocked, user can click to play
-                timeEl.textContent = '点击播放';
-            });
+                audioCtx.decodeAudioData(buf.buffer, (decoded) => {
+                    const dur = Math.round(decoded.duration);
+                    timeEl.textContent = dur > 60 ? Math.floor(dur / 60) + ':' + String(dur % 60).padStart(2, '0') : dur + 's';
+
+                    let source = null;
+                    const playAudio = () => {
+                        if (source) { source.stop(); source = null; playerEl.classList.remove('playing'); this._currentAudio = null; return; }
+                        source = audioCtx.createBufferSource();
+                        source.buffer = decoded;
+                        source.connect(audioCtx.destination);
+                        source.onended = () => { playerEl.classList.remove('playing'); source = null; this._currentAudio = null; };
+                        source.start();
+                        playerEl.classList.add('playing');
+                        this._currentAudio = { pause: () => { if (source) { source.stop(); source = null; } } };
+                    };
+
+                    playerEl.addEventListener('click', playAudio);
+                    // Auto-play immediately
+                    playAudio();
+                }, () => {
+                    // Decode failed, fallback
+                    timeEl.textContent = '播放失败';
+                });
+            } else {
+                // Fallback: use Audio element
+                const audio = new Audio('data:audio/wav;base64,' + resp.audio);
+                this._currentAudio = audio;
+                audio.addEventListener('loadedmetadata', () => {
+                    const dur = Math.round(audio.duration);
+                    timeEl.textContent = dur > 60 ? Math.floor(dur / 60) + ':' + String(dur % 60).padStart(2, '0') : dur + 's';
+                });
+                audio.addEventListener('ended', () => { playerEl.classList.remove('playing'); this._currentAudio = null; });
+                playerEl.addEventListener('click', () => {
+                    if (audio.paused) { audio.play(); playerEl.classList.add('playing'); }
+                    else { audio.pause(); playerEl.classList.remove('playing'); }
+                });
+                audio.play().then(() => playerEl.classList.add('playing')).catch(() => { timeEl.textContent = '点击播放'; });
+            }
         }).catch(() => {
-            // TTS failed, remove player silently
             playerEl.remove();
         });
     }
