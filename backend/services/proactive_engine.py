@@ -1,6 +1,7 @@
 from __future__ import annotations
 import asyncio
 import json
+import re
 import logging
 from datetime import datetime, timedelta
 from ..database import get_db
@@ -45,13 +46,14 @@ class ProactiveEngine:
                 await asyncio.sleep(60)
 
     def _is_user_responsive(self) -> bool:
-        """Check if user has been responding to recent proactive messages."""
+        """Check if user has been responding to recent proactive messages.
+        Only block if ALL of the last 5 proactive messages were unanswered."""
         db = get_db()
         rows = db.execute(
             "SELECT id, created_at FROM proactive_log WHERE was_sent=1 "
-            "ORDER BY created_at DESC LIMIT 3"
+            "ORDER BY created_at DESC LIMIT 5"
         ).fetchall()
-        if len(rows) < 2:
+        if len(rows) < 3:
             return True
 
         unanswered = 0
@@ -64,28 +66,35 @@ class ProactiveEngine:
             if not user_msg:
                 unanswered += 1
 
-        return unanswered < 2
+        # Only block if ALL recent messages are unanswered
+        return unanswered < len(rows)
 
     async def _check_and_decide(self):
         """Let the AI decide naturally whether to reach out — no rigid rules."""
         config = self._get_config()
         if not config.get("enabled"):
+            log.debug("Proactive disabled in config")
             return
 
         if llm_service._active_config is None:
+            log.debug("Proactive skipped: LLM not configured")
             return
 
         # Basic safety: cooldown + daily limit
         now = datetime.now()
         if now.timestamp() - self._last_sent < PROACTIVE_COOLDOWN:
+            log.debug("Proactive skipped: in cooldown")
             return
 
         max_daily = config.get("max_daily_messages", 5)
-        if self._today_sent_count() >= max_daily:
+        today_count = self._today_sent_count()
+        if today_count >= max_daily:
+            log.debug("Proactive skipped: daily limit reached (%d/%d)", today_count, max_daily)
             return
 
         # Don't spam if user isn't responding
         if not self._is_user_responsive():
+            log.info("Proactive skipped: user not responsive")
             return
 
         # Also check pending scheduled events
@@ -100,7 +109,7 @@ class ProactiveEngine:
         if should_send and message:
             trigger_type = "event" if pending_event else "ai_decided"
             trigger_detail = reason
-            await self._send_proactive(trigger_type, trigger_detail, message)
+            self._send_proactive(trigger_type, trigger_detail, message)
             log.info("Proactive sent: %s | reason: %s", message[:50], reason)
         else:
             log.info("Proactive skipped: %s", reason)
@@ -224,45 +233,75 @@ class ProactiveEngine:
 ## 你需要思考的问题
 你现在想不想找用户聊聊天？
 
-像一个真正的朋友一样思考：
-- 现在时间合适吗？太晚了就别打扰
-- 你们的关系到了什么程度？刚认识就别太热情
-- 最近有没有什么值得关心的事？（天气变化、用户提过的重要事件、情绪波动）
-- 你最近是不是发太多消息了？别让人觉得烦
-- 如果你真的想说点什么，会说什么？要自然，像发微信一样
+判断标准：
+- 现在时间合适吗？22:00-8:00之间不打扰，其他时间都可以
+- 有没有值得关心的事？（天气变化、用户提过的事、季节变化）
+- 如果有话想说，就大胆发，不要过度犹豫
+- 发消息就像给朋友发微信，自然就好，不用想太多
 
-不要机械地按照规则判断。用你的"感觉"决定。如果你觉得现在不该发，就不发。
+你可以选择发消息。如果有任何想说的话，就发吧。只在真的觉得不合适时才不发。
 
-以 JSON 格式回答（只输出JSON）：
-{{"should_send": true或false, "reason": "你的真实想法，一两句话", "message": "如果要发，写你真正想说的话，2-4句，自然口语化"}}"""
+以 JSON 格式回答（只输出JSON，不要其他文字）：
+{{"should_send": true或false, "reason": "你的想法，简短", "message": "你想说的话，2-4句，自然口语化"}}"""
 
         try:
             response = await llm_service.generate(
-                [{"role": "system", "content": "你是用户的AI伙伴，正在考虑要不要主动找用户聊天。用JSON回答。"},
+                [{"role": "system", "content": "你是用户的AI伙伴，正在考虑要不要主动找用户聊天。请直接输出JSON格式的回答，不要输出其他内容。"},
                  {"role": "user", "content": prompt}],
-                max_tokens=300
+                max_tokens=500
             )
 
             if not response:
+                log.warning("Proactive LLM returned empty response")
                 return False, "AI没有响应", ""
 
-            clean = response.strip()
-            for prefix in ["```json", "```"]:
-                if clean.startswith(prefix):
-                    clean = clean[len(prefix):]
-            if clean.endswith("```"):
-                clean = clean[:-3]
+            log.info("Proactive LLM raw response: %s", response[:300])
 
-            data = json.loads(clean.strip())
-            return data.get("should_send", False), data.get("reason", ""), data.get("message", "")
+            # Try to extract JSON from response (handle cases where LLM adds extra text)
+            data = self._parse_llm_json(response)
+            if data is None:
+                log.warning("Proactive JSON parse failed, raw: %s", response[:200])
+                return False, "parse error", ""
 
-        except json.JSONDecodeError:
-            log.warning("AI decision parse failed: %s", response[:200] if response else "empty")
-            # If JSON fails, treat the whole response as a message if it looks natural
-            return False, "parse error", ""
+            should_send = data.get("should_send", False)
+            reason = data.get("reason", "")
+            message = data.get("message", "")
+
+            log.info("Proactive decision: send=%s, reason=%s, msg=%s",
+                     should_send, reason, message[:50] if message else "")
+            return should_send, reason, message
+
         except Exception as e:
-            log.error("AI decision error: %s", e)
+            log.error("Proactive LLM error: %s", e, exc_info=True)
             return False, str(e), ""
+
+    def _parse_llm_json(self, text: str) -> dict | None:
+        """Parse JSON from LLM response, handling various formats."""
+        clean = text.strip()
+
+        # Remove markdown code blocks
+        for prefix in ["```json", "```"]:
+            if clean.startswith(prefix):
+                clean = clean[len(prefix):]
+        if clean.endswith("```"):
+            clean = clean[:-3]
+        clean = clean.strip()
+
+        # Try direct parse
+        try:
+            return json.loads(clean)
+        except json.JSONDecodeError:
+            pass
+
+        # Try to find JSON object in the text
+        match = re.search(r'\{[^{}]*"should_send"[^{}]*\}', clean, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group())
+            except json.JSONDecodeError:
+                pass
+
+        return None
 
     def _send_proactive(self, trigger_type: str, trigger_detail: str, message: str):
         """Actually send the proactive message."""
