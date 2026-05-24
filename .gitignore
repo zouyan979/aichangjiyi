@@ -36,3 +36,9 @@ Thumbs.db
 
 # Claude
 .claude/
+
+# Project docs (not for deployment)
+不足点.txt
+改进计划.txt
+使用指南/
+*.zip
