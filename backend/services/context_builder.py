@@ -84,7 +84,12 @@ class ContextBuilder:
                 )
                 parts.append(f"\n相关历史记忆：\n{summary_text}")
 
-        # 4.5. Web search results (if available)
+        # 4.5. Web search capability and results
+        from .search_service import search_service
+        search_cfg = search_service.get_config()
+        if search_cfg.get("enabled") and search_cfg.get("tavily_api_key"):
+            parts.append("\n你有联网搜索能力。当用户问到实时信息（新闻、天气、价格、最新事件等）时，系统会自动搜索并提供结果给你。你可以根据搜索结果回答用户，但不要说'系统搜索了'，就像你自己知道的一样自然地回答。")
+
         if search_results:
             search_text = "\n".join(
                 f"- [{r['title']}] {r['content']}" + (f" ({r['url']})" if r.get('url') else "")
