@@ -52,6 +52,14 @@ async def chat(req: ChatRequest):
                                      search_results=search_results,
                                      current_images=req.images)
 
+    # Debug: log message types being sent to LLM
+    for i, m in enumerate(messages):
+        c = m["content"]
+        if isinstance(c, list):
+            log.info("Msg[%d] role=%s content=list(%d items)", i, m["role"], len(c))
+        else:
+            log.info("Msg[%d] role=%s content=%s...", i, m["role"], c[:80] if c else "(empty)")
+
     # Collect full response - shared between generator and background task
     state = {"content": "", "error": None, "done": False}
 

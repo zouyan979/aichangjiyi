@@ -150,8 +150,20 @@ class LLMService:
         headers = self._build_headers(cfg, anthropic)
         body = self._build_body(cfg, messages, max_tokens, True, anthropic)
 
+        # Debug: log what we're sending
+        import copy
+        debug_body = copy.deepcopy(body)
+        for m in debug_body.get("messages", []):
+            c = m.get("content", "")
+            if isinstance(c, list):
+                m["content"] = f"[list with {len(c)} items]"
+            elif isinstance(c, str) and len(c) > 100:
+                m["content"] = c[:100] + "..."
+        log.info("LLM request: %s", json.dumps(debug_body, ensure_ascii=False)[:500])
+
         async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=10.0), verify=False, trust_env=False) as client:
             async with client.stream("POST", cfg["base_url"], headers=headers, json=body) as resp:
+                log.info("LLM response status: %d", resp.status_code)
                 if resp.status_code != 200:
                     error_text = ""
                     async for chunk in resp.aiter_bytes():
@@ -159,6 +171,7 @@ class LLMService:
                     raise ValueError(f"API错误 {resp.status_code}: {error_text[:300]}")
 
                 buffer = ""
+                chunk_count = 0
                 async for chunk in resp.aiter_bytes():
                     text = chunk.decode("utf-8", errors="replace")
                     buffer += text
@@ -172,6 +185,9 @@ class LLMService:
                         if result == "__DONE__":
                             return
                         if result:
+                            chunk_count += 1
+                            if chunk_count <= 3:
+                                log.info("LLM chunk[%d]: %r", chunk_count, result)
                             yield result
 
     async def generate(self, messages: list[dict], max_tokens: int = 2048,
