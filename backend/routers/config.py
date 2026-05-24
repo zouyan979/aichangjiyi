@@ -21,6 +21,7 @@ def _load_active_config():
             "base_url": row["base_url"],
             "api_key": row["api_key"],
             "model": row["model"],
+            "vision_model": row["vision_model"] or "",
             "temperature": row["temperature"],
             "max_tokens": row["max_tokens"]
         })
@@ -55,10 +56,10 @@ def create_config(config: ApiConfigCreate):
         row = db.execute("SELECT api_key FROM api_configs WHERE is_active=1 LIMIT 1").fetchone()
         api_key = row["api_key"] if row else ""
     cursor = db.execute(
-        "INSERT INTO api_configs (name, base_url, api_key, model, temperature, max_tokens, is_active) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO api_configs (name, base_url, api_key, model, vision_model, temperature, max_tokens, is_active) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (config.name, config.base_url, api_key, config.model,
-         config.temperature, config.max_tokens, 1)
+         config.vision_model, config.temperature, config.max_tokens, 1)
     )
     # Deactivate others
     db.execute("UPDATE api_configs SET is_active=0 WHERE id != ?", (cursor.lastrowid,))

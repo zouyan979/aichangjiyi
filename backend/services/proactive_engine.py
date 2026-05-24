@@ -118,6 +118,8 @@ class ProactiveEngine:
         """Gather all context the AI needs to make a human-like decision."""
         db = get_db()
         now = datetime.now()
+        config = self._get_config()
+        max_daily = config.get("max_daily_messages", 5)
 
         # Persona
         persona_text = persona_service.format_persona_prompt()

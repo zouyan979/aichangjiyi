@@ -249,10 +249,22 @@ class ChatUI {
         const imageFiles = this._pendingImages.map(p => p.file);
         this._clearPendingImages();
 
+        // Upload images first, get file paths
+        let imagePaths = [];
+        if (imageFiles.length > 0) {
+            try {
+                const uploadResult = await API.uploadImages(imageFiles);
+                imagePaths = (uploadResult.files || []).map(f => f.path);
+            } catch (e) {
+                console.error('Image upload failed:', e);
+                this._toast('图片上传失败: ' + e.message);
+            }
+        }
+
         if (!textOverride) {
             const msgData = { role: 'user', content: text || '', created_at: new Date().toISOString() };
-            if (imageDataUrls.length > 0) {
-                msgData.metadata = JSON.stringify({ images: imageDataUrls });
+            if (imagePaths.length > 0) {
+                msgData.metadata = JSON.stringify({ images: imagePaths });
             }
             this._appendMsg(msgData);
         }
@@ -263,7 +275,7 @@ class ChatUI {
 
         try {
             this.abortController = new AbortController();
-            for await (const event of API.streamChat(convId, text, imageDataUrls.length > 0 ? imageDataUrls : undefined)) {
+            for await (const event of API.streamChat(convId, text, imagePaths.length > 0 ? imagePaths : undefined)) {
                 if (event.type === 'chunk') {
                     fullContent += event.content;
                     this._updateBubble(placeholder, fullContent);
@@ -282,6 +294,7 @@ class ChatUI {
             }
             // Trigger TTS if enabled
             if (this.voiceEnabled && fullContent && !gotError) {
+                console.log('TTS triggered, text length:', fullContent.length);
                 this._playVoiceForBubble(placeholder, fullContent);
             }
         } catch (e) {
@@ -322,7 +335,11 @@ class ChatUI {
             if (messages.length > 0) {
                 this._hideWelcome();
                 for (const m of messages) {
-                    this._appendMsg(m, false);
+                    try {
+                        this._appendMsg(m, false);
+                    } catch (e) {
+                        console.error('[Chat] Render message error:', e, m);
+                    }
                 }
             }
         } catch (e) {
@@ -361,15 +378,26 @@ class ChatUI {
 
         // Check for images in metadata
         let imagesHtml = '';
-        let meta = msg.metadata;
-        if (typeof meta === 'string') {
-            try { meta = JSON.parse(meta); } catch { meta = null; }
-        }
-        if (meta && meta.images && meta.images.length > 0) {
-            const imgs = meta.images.map(url =>
-                `<img src="${this._esc(url)}" loading="lazy" onclick="window.open(this.src)">`
-            ).join('');
-            imagesHtml = `<div class="msgImages">${imgs}</div>`;
+        if (msg.metadata && typeof msg.metadata === 'string' && msg.metadata.length > 100) {
+            // Large metadata (legacy base64 images) — skip parsing to avoid performance issues
+            try {
+                const count = (msg.metadata.match(/"data:/g) || []).length;
+                if (count > 0) {
+                    imagesHtml = `<div class="msgImages" style="opacity:.5;font-size:.85rem">[${count} 张图片]</div>`;
+                }
+            } catch { }
+        } else if (msg.metadata) {
+            let meta = msg.metadata;
+            if (typeof meta === 'string') {
+                try { meta = JSON.parse(meta); } catch { meta = null; }
+            }
+            if (meta && meta.images && meta.images.length > 0) {
+                const imgs = meta.images.map(img => {
+                    const src = img.startsWith('data:') ? img : '/' + img;
+                    return `<img src="${this._esc(src)}" loading="lazy" onclick="window.open(this.src)">`;
+                }).join('');
+                imagesHtml = `<div class="msgImages">${imgs}</div>`;
+            }
         }
 
         const contentHtml = imagesHtml + (displayContent ? this._esc(displayContent) : '');
@@ -400,7 +428,12 @@ class ChatUI {
         bub.innerHTML = this._fmt(this._filterCode(txt));
         const c = el.querySelector('.msgC');
         const time = this._formatTime(new Date().toISOString());
-        c.innerHTML += `<div class="meta">${isProactive ? '<span class="tag">主动消息</span>' : ''}<span>${time}</span></div>`;
+        const existingMeta = c.querySelector('.meta');
+        if (existingMeta) {
+            existingMeta.innerHTML = `${isProactive ? '<span class="tag">主动消息</span>' : ''}<span>${time}</span>`;
+        } else {
+            c.innerHTML += `<div class="meta">${isProactive ? '<span class="tag">主动消息</span>' : ''}<span>${time}</span></div>`;
+        }
         this._scroll();
     }
 
@@ -431,7 +464,12 @@ class ChatUI {
         }
         const c = el.querySelector('.msgC');
         const time = this._formatTime(new Date().toISOString());
-        c.innerHTML += `<div class="meta"><span>${time}</span></div>`;
+        const existingMeta = c.querySelector('.meta');
+        if (existingMeta) {
+            existingMeta.innerHTML = `<span>${time}</span>`;
+        } else {
+            c.innerHTML += `<div class="meta"><span>${time}</span></div>`;
+        }
         this._scroll();
     }
 
@@ -464,7 +502,7 @@ class ChatUI {
         msgC.insertBefore(playerEl, msgC.querySelector('.meta'));
 
         API.synthesizeTTS(cleanText).then(resp => {
-            if (!resp.audio) return;
+            if (!resp.audio) { console.warn('TTS: no audio in response', resp); return; }
 
             const timeEl = playerEl.querySelector('.voice-time');
             const audioCtx = this._audioCtx;
@@ -513,7 +551,8 @@ class ChatUI {
                 });
                 audio.play().then(() => playerEl.classList.add('playing')).catch(() => { timeEl.textContent = '点击播放'; });
             }
-        }).catch(() => {
+        }).catch((err) => {
+            console.error('TTS error:', err);
             playerEl.remove();
         });
     }
@@ -544,7 +583,21 @@ class ChatUI {
     _formatTime(isoStr) {
         try {
             const d = new Date(isoStr);
-            return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+            const now = new Date();
+            const time = d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+
+            // Today: only show time
+            if (d.toDateString() === now.toDateString()) return time;
+
+            // Yesterday
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+            if (d.toDateString() === yesterday.toDateString()) return '昨天 ' + time;
+
+            // Older: full date + time
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${d.getFullYear()}-${month}-${day} ${time}`;
         } catch {
             return '';
         }

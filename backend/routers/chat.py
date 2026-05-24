@@ -52,14 +52,6 @@ async def chat(req: ChatRequest):
                                      search_results=search_results,
                                      current_images=req.images)
 
-    # Debug: log message types being sent to LLM
-    for i, m in enumerate(messages):
-        c = m["content"]
-        if isinstance(c, list):
-            log.info("Msg[%d] role=%s content=list(%d items)", i, m["role"], len(c))
-        else:
-            log.info("Msg[%d] role=%s content=%s...", i, m["role"], c[:80] if c else "(empty)")
-
     # Collect full response - shared between generator and background task
     state = {"content": "", "error": None, "done": False}
 
@@ -74,6 +66,7 @@ async def chat(req: ChatRequest):
                 yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
         except Exception as e:
             state["error"] = str(e)
+            log.error("Stream error: %s", e)
             yield f"data: {json.dumps({'type': 'error', 'message': state['error']})}\n\n"
         state["done"] = True
         yield f"data: {json.dumps({'type': 'done', 'message_id': None})}\n\n"
@@ -86,14 +79,18 @@ async def chat(req: ChatRequest):
             if state["done"]:
                 break
             await asyncio.sleep(0.5)
+        log.info("save_response: done=%s content_len=%d error=%s", state["done"], len(state["content"]), state["error"])
         if state["content"] and not state["error"]:
             ai_tokens = estimate_tokens(state["content"])
             memory_service.save_message(
                 req.conversation_id, "assistant", state["content"], ai_tokens
             )
+            log.info("save_response: message saved")
             asyncio.create_task(
                 _post_chat_tasks(req.conversation_id, req.content, state["content"])
             )
+        else:
+            log.warning("save_response: SKIPPED - content=%d error=%s", len(state["content"]), state["error"])
 
     response.background = save_response
     return response

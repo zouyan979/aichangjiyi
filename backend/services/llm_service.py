@@ -11,18 +11,55 @@ log = logging.getLogger("memoria.llm")
 class LLMService:
     def __init__(self):
         self._active_config = None
+        self._vision_model = ""
 
     def set_config(self, config: dict):
         self._active_config = config
+        self._vision_model = config.get("vision_model", "")
 
     def is_ready(self) -> bool:
         return self._active_config is not None
+
+    def _get_config_for_messages(self, messages: list[dict]) -> dict:
+        """Return config with vision_model swapped in if the CURRENT user message has images."""
+        cfg = dict(self._active_config)
+        if not self._vision_model:
+            return cfg
+        # Only check the last user message (current), not historical messages
+        for m in reversed(messages):
+            if m.get("role") == "user":
+                content = m.get("content", "")
+                if isinstance(content, list):
+                    if any(item.get("type") == "image_url" for item in content):
+                        cfg["model"] = self._vision_model
+                        log.info("Vision model activated: %s", self._vision_model)
+                        return cfg
+                break
+        return cfg
 
     def _is_anthropic(self, url: str) -> bool:
         """Detect if the API uses Anthropic format."""
         return "anthropic" in url.lower() or "/messages" in url
 
+    @staticmethod
+    def _is_mimo(url: str) -> bool:
+        """Detect MiMo API (uses api-key header)."""
+        return "xiaomimimo.com" in url.lower()
+
+    @staticmethod
+    def _mimo_openai_url(url: str) -> str:
+        """Convert MiMo Anthropic URL to OpenAI format."""
+        # /anthropic/v1/messages -> /v1/chat/completions
+        if "/anthropic" in url:
+            return url.replace("/anthropic/v1/messages", "/v1/chat/completions")
+        return url
+
     def _build_headers(self, cfg: dict, anthropic: bool) -> dict:
+        if self._is_mimo(cfg["base_url"]):
+            return {
+                "Content-Type": "application/json",
+                "api-key": cfg["api_key"]
+            }
         if anthropic:
             return {
                 "Content-Type": "application/json",
@@ -127,8 +164,11 @@ class LLMService:
                 return "__DONE__"
             try:
                 obj = json.loads(data)
-                return obj.get("choices", [{}])[0].get("delta", {}).get("content", "")
-            except json.JSONDecodeError:
+                choices = obj.get("choices", [])
+                if not choices:
+                    return None
+                return choices[0].get("delta", {}).get("content", "")
+            except (json.JSONDecodeError, IndexError, KeyError):
                 return None
 
     def _parse_response(self, data: dict, anthropic: bool) -> str:
@@ -139,31 +179,29 @@ class LLMService:
             texts = [b.get("text", "") for b in content_blocks if b.get("type") == "text"]
             return "".join(texts)
         else:
-            return data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            choices = data.get("choices", [])
+            if not choices:
+                return ""
+            return choices[0].get("message", {}).get("content", "")
 
     async def stream(self, messages: list[dict], max_tokens: int = 2048) -> AsyncGenerator[str, None]:
         if not self._active_config:
             raise ValueError("API未配置")
 
-        cfg = self._active_config
-        anthropic = self._is_anthropic(cfg["base_url"])
+        cfg = self._get_config_for_messages(messages)
+        is_mimo = self._is_mimo(cfg["base_url"])
+        # MiMo API: always use OpenAI format, convert URL if needed
+        if is_mimo:
+            url = self._mimo_openai_url(cfg["base_url"])
+            anthropic = False
+        else:
+            url = cfg["base_url"]
+            anthropic = self._is_anthropic(url)
         headers = self._build_headers(cfg, anthropic)
         body = self._build_body(cfg, messages, max_tokens, True, anthropic)
 
-        # Debug: log what we're sending
-        import copy
-        debug_body = copy.deepcopy(body)
-        for m in debug_body.get("messages", []):
-            c = m.get("content", "")
-            if isinstance(c, list):
-                m["content"] = f"[list with {len(c)} items]"
-            elif isinstance(c, str) and len(c) > 100:
-                m["content"] = c[:100] + "..."
-        log.info("LLM request: %s", json.dumps(debug_body, ensure_ascii=False)[:500])
-
         async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=10.0), verify=False, trust_env=False) as client:
-            async with client.stream("POST", cfg["base_url"], headers=headers, json=body) as resp:
-                log.info("LLM response status: %d", resp.status_code)
+            async with client.stream("POST", url, headers=headers, json=body) as resp:
                 if resp.status_code != 200:
                     error_text = ""
                     async for chunk in resp.aiter_bytes():
@@ -171,7 +209,6 @@ class LLMService:
                     raise ValueError(f"API错误 {resp.status_code}: {error_text[:300]}")
 
                 buffer = ""
-                chunk_count = 0
                 async for chunk in resp.aiter_bytes():
                     text = chunk.decode("utf-8", errors="replace")
                     buffer += text
@@ -185,9 +222,6 @@ class LLMService:
                         if result == "__DONE__":
                             return
                         if result:
-                            chunk_count += 1
-                            if chunk_count <= 3:
-                                log.info("LLM chunk[%d]: %r", chunk_count, result)
                             yield result
 
     async def generate(self, messages: list[dict], max_tokens: int = 2048,
@@ -195,8 +229,14 @@ class LLMService:
         if not self._active_config:
             raise ValueError("API未配置")
 
-        cfg = self._active_config
-        anthropic = self._is_anthropic(cfg["base_url"])
+        cfg = self._get_config_for_messages(messages)
+        is_mimo = self._is_mimo(cfg["base_url"])
+        if is_mimo:
+            url = self._mimo_openai_url(cfg["base_url"])
+            anthropic = False
+        else:
+            url = cfg["base_url"]
+            anthropic = self._is_anthropic(url)
         headers = self._build_headers(cfg, anthropic)
         body = self._build_body(cfg, messages, max_tokens, False, anthropic)
 
@@ -204,7 +244,7 @@ class LLMService:
         for attempt in range(max_retries + 1):
             try:
                 async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0), verify=False, trust_env=False) as client:
-                    resp = await client.post(cfg["base_url"], headers=headers, json=body)
+                    resp = await client.post(url, headers=headers, json=body)
                     if resp.status_code == 429:
                         retry_after = int(resp.headers.get("retry-after", 2 * (attempt + 1)))
                         log.warning("Rate limited, retrying in %ds (attempt %d/%d)", retry_after, attempt + 1, max_retries + 1)
@@ -229,7 +269,12 @@ class LLMService:
 
     async def test_connection(self, config: dict) -> bool:
         url = config["base_url"]
-        anthropic = self._is_anthropic(url)
+        is_mimo = self._is_mimo(url)
+        if is_mimo:
+            url = self._mimo_openai_url(url)
+            anthropic = False
+        else:
+            anthropic = self._is_anthropic(url)
         headers = self._build_headers(config, anthropic)
         body = self._build_body(config, [{"role": "user", "content": "ping"}], 5, False, anthropic)
 

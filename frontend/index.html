@@ -145,6 +145,13 @@
             <input class="fi" id="sTemp" type="number" min="0" max="2" step="0.1" value="0.8">
           </div>
         </div>
+        <div class="fRow">
+          <div class="fg">
+            <label class="fl">视觉模型（可选）</label>
+            <input class="fi" id="sVisionModel" placeholder="留空则用主模型，例如: mimo-v2.5">
+            <div class="fHelp">发图片时自动切换到此模型。留空表示始终用主模型。</div>
+          </div>
+        </div>
         <div class="apiGuide">
           <div class="apiGuideTitle">常见 API 配置示例</div>
           <div class="apiGuideItem" data-url="https://api.deepseek.com/v1/chat/completions" data-model="deepseek-chat">DeepSeek: api.deepseek.com</div>

@@ -26,33 +26,18 @@ class ContextBuilder:
         system_prompt = self._build_system_prompt(user_message, conversation_id, token_budget,
                                                    search_results)
         messages.append({"role": "system", "content": system_prompt})
+        system_tokens = estimate_tokens(system_prompt)
 
         # Step 2: Recent messages (already includes current user message since it's saved to DB first)
-        recent = self._select_recent_messages(user_message, conversation_id, token_budget)
-        img_count = 0
+        recent = self._select_recent_messages(user_message, conversation_id, token_budget,
+                                               system_prompt_tokens=system_tokens)
         for m in recent:
             role = m["role"]
             if role in ("user", "assistant"):
-                # Check if message has images in metadata
-                meta = {}
-                if m.get("metadata"):
-                    try:
-                        meta = json.loads(m["metadata"]) if isinstance(m["metadata"], str) else m["metadata"]
-                    except (json.JSONDecodeError, TypeError):
-                        pass
-
-                msg_images = meta.get("images", []) if isinstance(meta, dict) else []
-
-                # For the last user message (current), use current_images if provided
+                # Only add images for the CURRENT user message, not historical ones
                 is_last_user = (m == recent[-1] and role == "user" and current_images)
                 if is_last_user:
-                    msg_images = current_images
-
-                if msg_images and img_count < 6:  # max 6 images total in context
-                    # Limit images per message
-                    limited = msg_images[:2]
-                    img_count += len(limited)
-                    content = self._build_vision_content(m["content"], limited)
+                    content = self._build_vision_content(m["content"], current_images[:2])
                     messages.append({"role": role, "content": content})
                 else:
                     messages.append({"role": role, "content": m["content"]})
@@ -168,11 +153,12 @@ class ContextBuilder:
         return "\n".join(parts)
 
     def _select_recent_messages(self, user_message: str, conversation_id: int,
-                                token_budget: int) -> list[dict]:
-        # Reserve tokens for system prompt and response
-        system_overhead = 600  # rough estimate for system prompt
+                                token_budget: int,
+                                system_prompt_tokens: int = 600) -> list[dict]:
         response_reserve = 500
-        available = token_budget - system_overhead - response_reserve
+        available = token_budget - system_prompt_tokens - response_reserve
+        if available < 200:
+            available = 200  # ensure at least some messages fit
 
         recent = memory_service.get_recent_messages(conversation_id, limit=20)
         selected = []

@@ -4,6 +4,7 @@ import os
 import uuid
 import base64
 import logging
+from typing import List
 from fastapi import APIRouter, UploadFile, File, HTTPException
 
 log = logging.getLogger("memoria.upload")
@@ -25,7 +26,7 @@ router = APIRouter(prefix="/api/upload", tags=["upload"])
 
 
 @router.post("")
-async def upload_images(files: list[UploadFile] = File(...)):
+async def upload_images(files: List[UploadFile] = File(...)):
     if len(files) > MAX_FILES:
         raise HTTPException(400, f"最多上传 {MAX_FILES} 张图片")
 

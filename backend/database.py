@@ -43,16 +43,17 @@ def get_db() -> sqlite3.Connection:
 def init_schema(conn: sqlite3.Connection):
     conn.executescript("""
     CREATE TABLE IF NOT EXISTS api_configs (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        name        TEXT NOT NULL DEFAULT 'default',
-        base_url    TEXT NOT NULL,
-        api_key     TEXT NOT NULL,
-        model       TEXT NOT NULL,
-        temperature REAL DEFAULT 0.8,
-        max_tokens  INTEGER DEFAULT 2048,
-        is_active   INTEGER DEFAULT 0,
-        created_at  TEXT DEFAULT (datetime('now','localtime')),
-        updated_at  TEXT DEFAULT (datetime('now','localtime'))
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        name         TEXT NOT NULL DEFAULT 'default',
+        base_url     TEXT NOT NULL,
+        api_key      TEXT NOT NULL,
+        model        TEXT NOT NULL,
+        vision_model TEXT DEFAULT '',
+        temperature  REAL DEFAULT 0.8,
+        max_tokens   INTEGER DEFAULT 2048,
+        is_active    INTEGER DEFAULT 0,
+        created_at   TEXT DEFAULT (datetime('now','localtime')),
+        updated_at   TEXT DEFAULT (datetime('now','localtime'))
     );
 
     CREATE TABLE IF NOT EXISTS conversations (
@@ -142,6 +143,13 @@ def init_schema(conn: sqlite3.Connection):
     );
     """)
     conn.commit()
+
+    # Migration: add vision_model column if missing
+    try:
+        conn.execute("ALTER TABLE api_configs ADD COLUMN vision_model TEXT DEFAULT ''")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # column already exists
 
     # Ensure default conversation exists
     row = conn.execute("SELECT id FROM conversations LIMIT 1").fetchone()

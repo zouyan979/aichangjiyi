@@ -91,7 +91,7 @@ class TTSService:
 
         log.info("TTS request: url=%s, voice=%s, text_len=%d", tts_url, voice, len(truncated))
 
-        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0), verify=False) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0), verify=False, trust_env=False) as client:
             resp = await client.post(tts_url, headers=headers, json=body)
 
             if resp.status_code != 200:

@@ -65,6 +65,7 @@ class SettingsModal {
             document.getElementById('sUrl').value = '';
             document.getElementById('sKey').value = '';
             document.getElementById('sModel').value = '';
+            document.getElementById('sVisionModel').value = '';
             document.getElementById('sTemp').value = '0.8';
 
             // Fill if active config exists
@@ -74,6 +75,7 @@ class SettingsModal {
                 document.getElementById('sKey').value = active.api_key || '';
                 this._originalKey = active.api_key || '';
                 document.getElementById('sModel').value = active.model || '';
+                document.getElementById('sVisionModel').value = active.vision_model || '';
                 document.getElementById('sTemp').value = active.temperature || 0.8;
             }
 
@@ -140,6 +142,7 @@ class SettingsModal {
         const url = document.getElementById('sUrl').value.trim();
         const key = document.getElementById('sKey').value.trim();
         const model = document.getElementById('sModel').value.trim();
+        const visionModel = document.getElementById('sVisionModel').value.trim();
         const temp = parseFloat(document.getElementById('sTemp').value) || 0.8;
 
         if (!url || !model) {
@@ -159,6 +162,7 @@ class SettingsModal {
                 base_url: url,
                 api_key: keyUnchanged ? undefined : key,
                 model: model,
+                vision_model: visionModel,
                 temperature: temp,
                 max_tokens: 2048
             });

@@ -9,6 +9,7 @@ class ApiConfigCreate(BaseModel):
     base_url: str
     api_key: Optional[str] = None
     model: str
+    vision_model: str = ""
     temperature: float = 0.8
     max_tokens: int = 2048
 
@@ -18,6 +19,7 @@ class ApiConfigUpdate(BaseModel):
     base_url: Optional[str] = None
     api_key: Optional[str] = None
     model: Optional[str] = None
+    vision_model: Optional[str] = None
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
 
@@ -28,6 +30,7 @@ class ApiConfigOut(BaseModel):
     base_url: str
     api_key: str
     model: str
+    vision_model: str
     temperature: float
     max_tokens: int
     is_active: bool
