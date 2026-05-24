@@ -1,6 +1,10 @@
 from __future__ import annotations
+import os
+import glob
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 from ..database import get_db
+from ..config import DB_PATH
 from ..models import ApiConfigCreate, ApiConfigUpdate, ApiConfigOut, SearchConfigUpdate
 from ..services.llm_service import llm_service
 from ..services.search_service import search_service
@@ -147,3 +151,48 @@ def get_weather_config():
 def update_weather_config(city: str = ""):
     weather_service.set_city(city)
     return {"ok": True}
+
+
+@router.get("/backup/download")
+def download_backup():
+    """Download current database as backup file."""
+    if not os.path.exists(DB_PATH):
+        raise HTTPException(status_code=404, detail="数据库不存在")
+    return FileResponse(DB_PATH, filename="memoria_backup.db", media_type="application/octet-stream")
+
+
+@router.get("/backup/list")
+def list_backups():
+    """List available auto-backups."""
+    backup_dir = os.path.join(os.path.dirname(DB_PATH), "backups")
+    if not os.path.exists(backup_dir):
+        return []
+    backups = []
+    for f in sorted(glob.glob(os.path.join(backup_dir, "memoria_*.db")), reverse=True):
+        stat = os.stat(f)
+        backups.append({
+            "name": os.path.basename(f),
+            "size": stat.st_size,
+            "created": stat.st_mtime
+        })
+    return backups
+
+
+@router.post("/backup/restore/{name}")
+def restore_backup(name: str):
+    """Restore from a backup file."""
+    import shutil
+    backup_dir = os.path.join(os.path.dirname(DB_PATH), "backups")
+    backup_path = os.path.join(backup_dir, name)
+    if not os.path.exists(backup_path) or ".." in name:
+        raise HTTPException(status_code=404, detail="备份不存在")
+    # Close existing connection
+    from ..database import close_db
+    close_db()
+    shutil.copy2(backup_path, DB_PATH)
+    # Remove WAL files
+    for ext in ["-wal", "-shm"]:
+        wal = DB_PATH + ext
+        if os.path.exists(wal):
+            os.remove(wal)
+    return {"ok": True, "message": "已恢复，请刷新页面"}

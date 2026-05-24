@@ -1,5 +1,7 @@
 import sqlite3
 import os
+import shutil
+import glob
 import json
 from datetime import datetime
 from .config import DB_PATH
@@ -7,10 +9,29 @@ from .config import DB_PATH
 _connection = None
 
 
+def _auto_backup():
+    """Auto-backup database on startup, keep last 5 backups."""
+    if not os.path.exists(DB_PATH):
+        return
+    backup_dir = os.path.join(os.path.dirname(DB_PATH), "backups")
+    os.makedirs(backup_dir, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_path = os.path.join(backup_dir, f"memoria_{ts}.db")
+    try:
+        shutil.copy2(DB_PATH, backup_path)
+        # Keep only last 5 backups
+        backups = sorted(glob.glob(os.path.join(backup_dir, "memoria_*.db")))
+        for old in backups[:-5]:
+            os.remove(old)
+    except Exception:
+        pass
+
+
 def get_db() -> sqlite3.Connection:
     global _connection
     if _connection is None:
         os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+        _auto_backup()
         _connection = sqlite3.connect(DB_PATH, check_same_thread=False)
         _connection.row_factory = sqlite3.Row
         _connection.execute("PRAGMA journal_mode=WAL")
