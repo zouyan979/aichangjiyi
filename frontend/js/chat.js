@@ -6,14 +6,18 @@ class ChatUI {
         this.$inp = document.getElementById('inp');
         this.$send = document.getElementById('send');
         this.$voice = document.getElementById('btnVoice');
+        this.$mic = document.getElementById('btnMic');
         this.busy = false;
         this.abortController = null;
         this.voiceEnabled = false;
         this._currentAudio = null;
         this._audioCtx = null;
+        this._recognition = null;
+        this._recording = false;
 
         this._bind();
         this._initVoice();
+        this._initSpeechRecognition();
     }
 
     _bind() {
@@ -27,6 +31,7 @@ class ChatUI {
         });
         this.$send.addEventListener('click', () => this.send());
         this.$voice.addEventListener('click', () => this._toggleVoice());
+        this.$mic.addEventListener('click', () => this._toggleMic());
     }
 
     async _initVoice() {
@@ -53,9 +58,105 @@ class ChatUI {
         }
     }
 
+    _initSpeechRecognition() {
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SR) {
+            this.$mic.style.display = 'none';
+            return;
+        }
+        this._recognition = new SR();
+        this._recognition.lang = 'zh-CN';
+        this._recognition.interimResults = true;
+        this._recognition.continuous = true;
+        this._recognition.maxAlternatives = 1;
+
+        this._recognition.onresult = (e) => {
+            let final = '', interim = '';
+            for (let i = e.resultIndex; i < e.results.length; i++) {
+                const t = e.results[i][0].transcript;
+                if (e.results[i].isFinal) final += t;
+                else interim += t;
+            }
+            if (final) {
+                this.$inp.value = (this.$inp.value + final).trim();
+                this.$inp.dispatchEvent(new Event('input'));
+            }
+        };
+
+        this._recognition.onerror = (e) => {
+            console.warn('[STT] Error:', e.error);
+            if (e.error === 'not-allowed') {
+                this._toast('请允许麦克风权限');
+            }
+            this._stopRecording();
+        };
+
+        this._recognition.onend = () => {
+            const wasRecording = this._recording;
+            this._stopRecording();
+            if (wasRecording) {
+                const text = this.$inp.value.trim();
+                if (text) this.send();
+            }
+        };
+    }
+
+    _toggleMic() {
+        if (!this._recognition) {
+            this._toast('当前浏览器不支持语音输入，请使用 Chrome 或 Edge');
+            return;
+        }
+        if (this._recording) {
+            this._recognition.stop();
+        } else {
+            this._startRecording();
+        }
+    }
+
+    _startRecording() {
+        if (this.busy) return;
+        // Unlock audio context
+        if (!this._audioCtx) {
+            this._audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (this._audioCtx.state === 'suspended') this._audioCtx.resume();
+
+        this._recording = true;
+        this.$mic.classList.add('recording');
+        this.$mic.title = '点击停止';
+        this.$send.disabled = true;
+        try {
+            this._recognition.start();
+        } catch (e) {
+            this._stopRecording();
+        }
+    }
+
+    _stopRecording() {
+        this._recording = false;
+        this.$mic.classList.remove('recording');
+        this.$mic.title = '按住说话';
+        this.$send.disabled = !this.$inp.value.trim();
+    }
+
+    _toast(msg) {
+        const t = document.createElement('div');
+        t.className = 'toast';
+        t.textContent = msg;
+        document.body.appendChild(t);
+        setTimeout(() => t.remove(), 3000);
+    }
+
     async send(textOverride) {
         const text = textOverride || this.$inp.value.trim();
         if (!text || this.busy) return;
+
+        // Stop recording if active
+        if (this._recording) {
+            this._recording = false;
+            this.$mic.classList.remove('recording');
+            try { this._recognition.stop(); } catch (e) { /* ignore */ }
+        }
 
         // Unlock audio context on user gesture
         if (!this._audioCtx) {
