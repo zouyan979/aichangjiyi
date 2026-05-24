@@ -64,6 +64,12 @@ class ChatUI {
             this.$mic.style.display = 'none';
             return;
         }
+        // Web Speech API requires HTTPS or localhost
+        const isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+        if (!isSecure) {
+            this.$mic.style.display = 'none';
+            return;
+        }
         this._recognition = new SR();
         this._recognition.lang = 'zh-CN';
         this._recognition.interimResults = true;
@@ -86,7 +92,11 @@ class ChatUI {
         this._recognition.onerror = (e) => {
             console.warn('[STT] Error:', e.error);
             if (e.error === 'not-allowed') {
-                this._toast('请允许麦克风权限');
+                this._toast('麦克风权限被拒绝，请在浏览器地址栏左侧点击锁图标重新授权');
+            } else if (e.error === 'audio-capture') {
+                this._toast('未检测到麦克风设备');
+            } else if (e.error === 'service-not-allowed') {
+                this._toast('语音服务不可用，请使用 Chrome 或 Edge 浏览器');
             }
             this._stopRecording();
         };
