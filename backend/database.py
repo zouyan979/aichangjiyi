@@ -32,11 +32,26 @@ def get_db() -> sqlite3.Connection:
     if _connection is None:
         os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
         _auto_backup()
-        _connection = sqlite3.connect(DB_PATH, check_same_thread=False)
-        _connection.row_factory = sqlite3.Row
-        _connection.execute("PRAGMA journal_mode=WAL")
-        _connection.execute("PRAGMA foreign_keys=ON")
-        init_schema(_connection)
+        try:
+            _connection = sqlite3.connect(DB_PATH, check_same_thread=False)
+            _connection.row_factory = sqlite3.Row
+            _connection.execute("PRAGMA journal_mode=WAL")
+            _connection.execute("PRAGMA foreign_keys=ON")
+            init_schema(_connection)
+        except sqlite3.DatabaseError:
+            # Database is corrupted — rename it and create a fresh one
+            import logging
+            log = logging.getLogger("memoria.db")
+            corrupted = DB_PATH + ".corrupted"
+            if os.path.exists(corrupted):
+                os.remove(corrupted)
+            os.rename(DB_PATH, corrupted)
+            log.warning("Database corrupted, backed up to %s, creating new", corrupted)
+            _connection = sqlite3.connect(DB_PATH, check_same_thread=False)
+            _connection.row_factory = sqlite3.Row
+            _connection.execute("PRAGMA journal_mode=WAL")
+            _connection.execute("PRAGMA foreign_keys=ON")
+            init_schema(_connection)
     return _connection
 
 

@@ -69,13 +69,16 @@ async def auth_middleware(request: Request, call_next):
         or not path.startswith("/api")
     )
     if not skip:
-        from .routers.auth import is_localhost, is_auth_configured, verify_token
-        # Localhost always allowed (desktop app)
-        if not is_localhost(request) and is_auth_configured():
-            token = request.headers.get("Authorization", "").removeprefix("Bearer ")
-            if not verify_token(token):
-                return Response('{"detail":"需要登录"}', status_code=401,
-                                media_type="application/json")
+        try:
+            from .routers.auth import is_localhost, is_auth_configured, verify_token
+            # Localhost always allowed (desktop app)
+            if not is_localhost(request) and is_auth_configured():
+                token = request.headers.get("Authorization", "").removeprefix("Bearer ")
+                if not verify_token(token):
+                    return Response('{"detail":"需要登录"}', status_code=401,
+                                    media_type="application/json")
+        except Exception:
+            pass  # DB error during auth check — allow request through
     return await call_next(request)
 
 
