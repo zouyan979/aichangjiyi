@@ -41,10 +41,14 @@ class TTSService:
 
     def _derive_tts_url(self, base_url: str) -> str | None:
         """Derive TTS endpoint from the chat base_url."""
-        if "xiaomimimo.com" in base_url:
-            return "https://api.xiaomimimo.com/v1/chat/completions"
         if "/v1/chat/completions" in base_url:
             return base_url
+        # Extract domain: https://token-plan-cn.xiaomimimo.com/anthropic/v1/messages
+        # -> https://token-plan-cn.xiaomimimo.com/v1/chat/completions
+        if "xiaomimimo.com" in base_url:
+            from urllib.parse import urlparse
+            parsed = urlparse(base_url)
+            return f"{parsed.scheme}://{parsed.netloc}/v1/chat/completions"
         if "/v1/messages" in base_url:
             return base_url.replace("/v1/messages", "/v1/chat/completions")
         return None
@@ -87,7 +91,7 @@ class TTSService:
 
         log.info("TTS request: url=%s, voice=%s, text_len=%d", tts_url, voice, len(truncated))
 
-        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0), verify=False) as client:
             resp = await client.post(tts_url, headers=headers, json=body)
 
             if resp.status_code != 200:
