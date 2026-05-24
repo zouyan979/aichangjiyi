@@ -27,31 +27,59 @@ def _auto_backup():
         pass
 
 
+def _create_connection():
+    """Create a fresh database connection and initialize schema."""
+    _connection = sqlite3.connect(DB_PATH, check_same_thread=False)
+    _connection.row_factory = sqlite3.Row
+    _connection.execute("PRAGMA journal_mode=WAL")
+    _connection.execute("PRAGMA foreign_keys=ON")
+    init_schema(_connection)
+    return _connection
+
+
+def _is_corrupted(conn):
+    """Test if the database connection is working."""
+    try:
+        conn.execute("SELECT count(*) FROM app_settings").fetchone()
+        return False
+    except sqlite3.DatabaseError:
+        return True
+
+
+def _recover_db():
+    """Handle corrupted database: back it up and create a fresh one."""
+    global _connection
+    import logging
+    log = logging.getLogger("memoria.db")
+    corrupted = DB_PATH + ".corrupted"
+    if os.path.exists(corrupted):
+        os.remove(corrupted)
+    if os.path.exists(DB_PATH):
+        os.rename(DB_PATH, corrupted)
+        log.warning("Database corrupted, backed up to %s", corrupted)
+    if _connection:
+        try:
+            _connection.close()
+        except Exception:
+            pass
+        _connection = None
+    _connection = _create_connection()
+    log.warning("Created fresh database")
+
+
 def get_db() -> sqlite3.Connection:
     global _connection
     if _connection is None:
         os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
         _auto_backup()
         try:
-            _connection = sqlite3.connect(DB_PATH, check_same_thread=False)
-            _connection.row_factory = sqlite3.Row
-            _connection.execute("PRAGMA journal_mode=WAL")
-            _connection.execute("PRAGMA foreign_keys=ON")
-            init_schema(_connection)
+            _connection = _create_connection()
         except sqlite3.DatabaseError:
-            # Database is corrupted — rename it and create a fresh one
-            import logging
-            log = logging.getLogger("memoria.db")
-            corrupted = DB_PATH + ".corrupted"
-            if os.path.exists(corrupted):
-                os.remove(corrupted)
-            os.rename(DB_PATH, corrupted)
-            log.warning("Database corrupted, backed up to %s, creating new", corrupted)
-            _connection = sqlite3.connect(DB_PATH, check_same_thread=False)
-            _connection.row_factory = sqlite3.Row
-            _connection.execute("PRAGMA journal_mode=WAL")
-            _connection.execute("PRAGMA foreign_keys=ON")
-            init_schema(_connection)
+            _recover_db()
+    else:
+        # Validate existing connection is still healthy
+        if _is_corrupted(_connection):
+            _recover_db()
     return _connection
 
 
