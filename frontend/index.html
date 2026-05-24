@@ -63,6 +63,9 @@
   <div class="inArea">
     <div class="inWrap">
       <textarea id="inp" placeholder="说点什么..." rows="1"></textarea>
+      <button class="vBtn" id="btnVoice" title="语音消息">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+      </button>
       <button class="sBtn" id="send" disabled>
         <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
       </button>
@@ -70,6 +73,7 @@
     <div class="inFoot">
       <span id="mSt"><span class="dot off"></span>记忆: 空</span>
       <span id="pSt"><span class="dot off"></span>主动消息: 关闭</span>
+      <span id="vSt"><span class="dot off"></span>语音: 关</span>
     </div>
   </div>
 
@@ -156,6 +160,26 @@
           <input class="fi" id="sCity" placeholder="例如: Beijing, Shanghai（留空自动检测）">
           <div class="fHelp">用于天气信息，AI 主动消息会根据天气提醒你。留空则根据 IP 自动定位。</div>
         </div>
+
+        <div class="st">语音消息</div>
+        <div class="tgl">
+          <span class="tglL">启用语音回复</span>
+          <div class="tglB" id="tglVoice"></div>
+        </div>
+        <div class="fg">
+          <label class="fl">语音角色</label>
+          <select class="fi" id="sVoice">
+            <option value="冰糖">冰糖 (女声)</option>
+            <option value="茉莉">茉莉 (女声)</option>
+            <option value="苏打">苏打 (男声)</option>
+            <option value="白桦">白桦 (男声)</option>
+            <option value="Mia">Mia (EN female)</option>
+            <option value="Chloe">Chloe (EN female)</option>
+            <option value="Milo">Milo (EN male)</option>
+            <option value="Dean">Dean (EN male)</option>
+          </select>
+        </div>
+        <div class="fHelp" style="margin-bottom:12px">开启后 AI 回复会自动生成语音。需要 MiMo API 支持。</div>
 
         <div class="st">主动消息（智能模式）</div>
         <div class="tgl">

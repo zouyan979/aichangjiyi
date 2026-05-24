@@ -15,6 +15,7 @@ class SettingsModal {
         document.getElementById('closeSet').addEventListener('click', () => this.close());
         this.$tglPro.addEventListener('click', () => this.$tglPro.classList.toggle('on'));
         this.$tglSearch.addEventListener('click', () => this.$tglSearch.classList.toggle('on'));
+        document.getElementById('tglVoice').addEventListener('click', () => document.getElementById('tglVoice').classList.toggle('on'));
         document.getElementById('btnTest').addEventListener('click', () => this._testApi());
         document.getElementById('btnSave').addEventListener('click', () => this._save());
 
@@ -52,11 +53,12 @@ class SettingsModal {
 
     async _loadCurrent() {
         try {
-            const [configs, proConfig, searchCfg, weatherCfg] = await Promise.all([
+            const [configs, proConfig, searchCfg, weatherCfg, ttsCfg] = await Promise.all([
                 API.listConfigs(),
                 API.getProactiveConfig(),
                 API.getSearchConfig().catch(() => ({ enabled: false, tavily_api_key: '' })),
-                API.getWeatherConfig().catch(() => ({ city: '' }))
+                API.getWeatherConfig().catch(() => ({ city: '' })),
+                API.getTTSConfig().catch(() => ({ enabled: false, voice: '冰糖' }))
             ]);
 
             // Clear fields first
@@ -86,6 +88,10 @@ class SettingsModal {
 
             // Weather city
             document.getElementById('sCity').value = weatherCfg.city || '';
+
+            // TTS config
+            document.getElementById('tglVoice').classList.toggle('on', !!ttsCfg.enabled);
+            document.getElementById('sVoice').value = ttsCfg.voice || '冰糖';
         } catch (e) {
             console.error('Load settings error:', e);
         }
@@ -174,6 +180,12 @@ class SettingsModal {
             // Weather city
             const city = document.getElementById('sCity').value.trim();
             await API.updateWeatherConfig(city);
+
+            // TTS config
+            await API.updateTTSConfig({
+                enabled: document.getElementById('tglVoice').classList.contains('on'),
+                voice: document.getElementById('sVoice').value
+            });
 
             this.close();
             this.app.toast('设置已保存', 'ok');

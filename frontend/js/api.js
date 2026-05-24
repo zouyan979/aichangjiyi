@@ -260,6 +260,12 @@ const API = {
     getWeatherConfig() { return this._fetch('/config/weather'); },
     updateWeatherConfig(city) { return this._fetch(`/config/weather?city=${encodeURIComponent(city)}`, { method: 'PUT' }); },
 
+    // ===== TTS =====
+    getTTSConfig() { return this._fetch('/tts/config'); },
+    updateTTSConfig(data) { return this._fetch('/tts/config', { method: 'PUT', body: JSON.stringify(data) }); },
+    synthesizeTTS(text) { return this._fetch('/tts/synthesize', { method: 'POST', body: JSON.stringify({ text }), timeout: 60000 }); },
+    testTTS() { return this._fetch('/tts/test', { method: 'POST', timeout: 60000 }); },
+
     // ===== Auth =====
     authStatus() { return this._fetch('/auth/status'); },
     authLogin(password) { return this._fetch('/auth/login', { method: 'POST', body: JSON.stringify({ password }) }); },

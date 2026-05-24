@@ -165,6 +165,16 @@ class ProactiveLogOut(BaseModel):
     created_at: str
 
 
+# ---- TTS ----
+class TTSRequest(BaseModel):
+    text: str
+
+
+class TTSConfigUpdate(BaseModel):
+    enabled: Optional[bool] = None
+    voice: Optional[str] = None
+
+
 # ---- Memory Stats ----
 class MemoryStatsOut(BaseModel):
     total_messages: int

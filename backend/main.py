@@ -26,6 +26,7 @@ from .routers import conversations as conv_router
 from .routers import memory as memory_router
 from .routers import persona as persona_router
 from .routers import proactive as proactive_router
+from .routers import tts as tts_router
 from .routers import auth as auth_router
 from .services.proactive_engine import proactive_engine
 
@@ -84,6 +85,7 @@ app.include_router(conv_router.router)
 app.include_router(memory_router.router)
 app.include_router(persona_router.router)
 app.include_router(proactive_router.router)
+app.include_router(tts_router.router)
 
 # Serve frontend static files
 if getattr(sys, 'frozen', False):

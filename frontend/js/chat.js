@@ -5,10 +5,14 @@ class ChatUI {
         this.$chatIn = document.getElementById('chatIn');
         this.$inp = document.getElementById('inp');
         this.$send = document.getElementById('send');
+        this.$voice = document.getElementById('btnVoice');
         this.busy = false;
         this.abortController = null;
+        this.voiceEnabled = false;
+        this._currentAudio = null;
 
         this._bind();
+        this._initVoice();
     }
 
     _bind() {
@@ -21,6 +25,31 @@ class ChatUI {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.send(); }
         });
         this.$send.addEventListener('click', () => this.send());
+        this.$voice.addEventListener('click', () => this._toggleVoice());
+    }
+
+    async _initVoice() {
+        try {
+            const cfg = await API.getTTSConfig();
+            this.voiceEnabled = !!cfg.enabled;
+            this._updateVoiceUI();
+        } catch (e) { /* ignore */ }
+    }
+
+    _toggleVoice() {
+        this.voiceEnabled = !this.voiceEnabled;
+        this._updateVoiceUI();
+        API.updateTTSConfig({ enabled: this.voiceEnabled }).catch(() => {});
+    }
+
+    _updateVoiceUI() {
+        this.$voice.classList.toggle('active', this.voiceEnabled);
+        const vSt = document.getElementById('vSt');
+        if (vSt) {
+            const dot = vSt.querySelector('.dot');
+            dot.className = this.voiceEnabled ? 'dot on' : 'dot off';
+            vSt.lastChild.textContent = this.voiceEnabled ? '语音: 开' : '语音: 关';
+        }
     }
 
     async send(textOverride) {
@@ -64,6 +93,10 @@ class ChatUI {
             }
             if (!fullContent && !gotError && !placeholder.dataset.finalized) {
                 this._finalizeWithError(placeholder, '', '未收到任何响应，请检查网络或API配置');
+            }
+            // Trigger TTS if enabled
+            if (this.voiceEnabled && fullContent && !gotError) {
+                this._playVoiceForBubble(placeholder, fullContent);
             }
         } catch (e) {
             gotError = true;
@@ -199,6 +232,72 @@ class ChatUI {
         const time = this._formatTime(new Date().toISOString());
         c.innerHTML += `<div class="meta"><span>${time}</span></div>`;
         this._scroll();
+    }
+
+    _playVoiceForBubble(bubbleEl, text) {
+        // Stop any currently playing audio
+        if (this._currentAudio) {
+            this._currentAudio.pause();
+            this._currentAudio = null;
+        }
+
+        // Clean text for TTS: remove markdown, code blocks, etc.
+        let cleanText = text.replace(/```[\s\S]*?```/g, '').replace(/`[^`]+`/g, '');
+        cleanText = cleanText.replace(/\*\*/g, '').replace(/\[代码已过滤\]/g, '').trim();
+        if (!cleanText) return;
+
+        // Truncate for TTS
+        if (cleanText.length > 500) {
+            const truncated = cleanText.substring(0, 500);
+            const lastPunct = Math.max(truncated.lastIndexOf('。'), truncated.lastIndexOf('！'), truncated.lastIndexOf('？'), truncated.lastIndexOf('!'), truncated.lastIndexOf('?'));
+            cleanText = lastPunct > 200 ? truncated.substring(0, lastPunct + 1) : truncated;
+        }
+
+        const msgC = bubbleEl.querySelector('.msgC');
+        if (!msgC) return;
+
+        // Add loading indicator
+        const playerEl = document.createElement('div');
+        playerEl.className = 'voice-player';
+        playerEl.innerHTML = `<div class="voice-play"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg></div><div class="voice-bars"><div class="voice-bar" style="height:8px"></div><div class="voice-bar" style="height:12px"></div><div class="voice-bar" style="height:6px"></div><div class="voice-bar" style="height:14px"></div><div class="voice-bar" style="height:10px"></div></div><div class="voice-time">...</div>`;
+        msgC.insertBefore(playerEl, msgC.querySelector('.meta'));
+
+        API.synthesizeTTS(cleanText).then(resp => {
+            if (!resp.audio) return;
+            const audio = new Audio('data:audio/wav;base64,' + resp.audio);
+            this._currentAudio = audio;
+
+            const timeEl = playerEl.querySelector('.voice-time');
+            audio.addEventListener('loadedmetadata', () => {
+                const dur = Math.round(audio.duration);
+                timeEl.textContent = dur > 60 ? Math.floor(dur / 60) + ':' + String(dur % 60).padStart(2, '0') : dur + 's';
+            });
+            audio.addEventListener('ended', () => {
+                playerEl.classList.remove('playing');
+                this._currentAudio = null;
+            });
+
+            playerEl.addEventListener('click', () => {
+                if (audio.paused) {
+                    audio.play();
+                    playerEl.classList.add('playing');
+                } else {
+                    audio.pause();
+                    playerEl.classList.remove('playing');
+                }
+            });
+
+            // Auto-play
+            audio.play().then(() => {
+                playerEl.classList.add('playing');
+            }).catch(() => {
+                // Auto-play blocked, user can click to play
+                timeEl.textContent = '点击播放';
+            });
+        }).catch(() => {
+            // TTS failed, remove player silently
+            playerEl.remove();
+        });
     }
 
     _filterCode(txt) {
