@@ -7,6 +7,9 @@ class ChatUI {
         this.$send = document.getElementById('send');
         this.$voice = document.getElementById('btnVoice');
         this.$mic = document.getElementById('btnMic');
+        this.$attach = document.getElementById('btnAttach');
+        this.$fileInput = document.getElementById('fileInput');
+        this.$imgPreview = document.getElementById('imgPreview');
         this.busy = false;
         this.abortController = null;
         this.voiceEnabled = false;
@@ -14,6 +17,7 @@ class ChatUI {
         this._audioCtx = null;
         this._recognition = null;
         this._recording = false;
+        this._pendingImages = [];  // {file, dataUrl, element}
 
         this._bind();
         this._initVoice();
@@ -24,7 +28,7 @@ class ChatUI {
         this.$inp.addEventListener('input', () => {
             this.$inp.style.height = 'auto';
             this.$inp.style.height = Math.min(this.$inp.scrollHeight, 150) + 'px';
-            this.$send.disabled = !this.$inp.value.trim() || this.busy;
+            this.$send.disabled = (!this.$inp.value.trim() && this._pendingImages.length === 0) || this.busy;
         });
         this.$inp.addEventListener('keydown', e => {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.send(); }
@@ -32,6 +36,8 @@ class ChatUI {
         this.$send.addEventListener('click', () => this.send());
         this.$voice.addEventListener('click', () => this._toggleVoice());
         this.$mic.addEventListener('click', () => this._toggleMic());
+        this.$attach.addEventListener('click', () => this.$fileInput.click());
+        this.$fileInput.addEventListener('change', (e) => this._onFilesSelected(e));
     }
 
     async _initVoice() {
@@ -149,6 +155,56 @@ class ChatUI {
         this.$send.disabled = !this.$inp.value.trim();
     }
 
+    _onFilesSelected(e) {
+        const files = Array.from(e.target.files);
+        if (!files.length) return;
+        if (this._pendingImages.length + files.length > 4) {
+            this._toast('最多同时发送 4 张图片');
+            return;
+        }
+        for (const file of files) {
+            if (file.size > 10 * 1024 * 1024) {
+                this._toast(`${file.name} 超过 10MB 限制`);
+                continue;
+            }
+            const reader = new FileReader();
+            reader.onload = () => {
+                this._pendingImages.push({ file, dataUrl: reader.result });
+                this._renderImagePreviews();
+                this.$send.disabled = this.busy;
+            };
+            reader.readAsDataURL(file);
+        }
+        // Reset file input so same file can be selected again
+        this.$fileInput.value = '';
+    }
+
+    _renderImagePreviews() {
+        this.$imgPreview.innerHTML = '';
+        if (this._pendingImages.length === 0) {
+            this.$imgPreview.style.display = 'none';
+            return;
+        }
+        this.$imgPreview.style.display = 'flex';
+        this._pendingImages.forEach((p, i) => {
+            const thumb = document.createElement('div');
+            thumb.className = 'thumb';
+            thumb.innerHTML = `<img src="${p.dataUrl}"><button class="xDel" data-idx="${i}">&times;</button>`;
+            thumb.querySelector('.xDel').addEventListener('click', () => {
+                this._pendingImages.splice(i, 1);
+                this._renderImagePreviews();
+                this.$send.disabled = (!this.$inp.value.trim() && this._pendingImages.length === 0) || this.busy;
+            });
+            this.$imgPreview.appendChild(thumb);
+        });
+    }
+
+    _clearPendingImages() {
+        this._pendingImages = [];
+        this.$imgPreview.innerHTML = '';
+        this.$imgPreview.style.display = 'none';
+    }
+
     _toast(msg) {
         const t = document.createElement('div');
         t.className = 'toast';
@@ -159,7 +215,8 @@ class ChatUI {
 
     async send(textOverride) {
         const text = textOverride || this.$inp.value.trim();
-        if (!text || this.busy) return;
+        const hasImages = this._pendingImages.length > 0;
+        if ((!text && !hasImages) || this.busy) return;
 
         // Stop recording if active
         if (this._recording) {
@@ -187,8 +244,17 @@ class ChatUI {
         this._hideWelcome();
         this.busy = true;
 
+        // Collect pending images before clearing
+        const imageDataUrls = this._pendingImages.map(p => p.dataUrl);
+        const imageFiles = this._pendingImages.map(p => p.file);
+        this._clearPendingImages();
+
         if (!textOverride) {
-            this._appendMsg({ role: 'user', content: text, created_at: new Date().toISOString() });
+            const msgData = { role: 'user', content: text || '', created_at: new Date().toISOString() };
+            if (imageDataUrls.length > 0) {
+                msgData.metadata = JSON.stringify({ images: imageDataUrls });
+            }
+            this._appendMsg(msgData);
         }
 
         const placeholder = this._placeholder();
@@ -197,7 +263,7 @@ class ChatUI {
 
         try {
             this.abortController = new AbortController();
-            for await (const event of API.streamChat(convId, text)) {
+            for await (const event of API.streamChat(convId, text, imageDataUrls.length > 0 ? imageDataUrls : undefined)) {
                 if (event.type === 'chunk') {
                     fullContent += event.content;
                     this._updateBubble(placeholder, fullContent);
@@ -230,7 +296,7 @@ class ChatUI {
         } finally {
             this.busy = false;
             this.abortController = null;
-            this.$send.disabled = !this.$inp.value.trim();
+            this.$send.disabled = (!this.$inp.value.trim() && this._pendingImages.length === 0);
             this.app.updateStatus();
             this.app.onChatComplete();
         }
@@ -292,7 +358,22 @@ class ChatUI {
 
         const time = this._formatTime(msg.created_at);
         const displayContent = msg.role === 'assistant' ? this._filterCode(msg.content) : msg.content;
-        el.innerHTML = `<div class="msgC"><div class="bub">${this._esc(displayContent)}</div>` +
+
+        // Check for images in metadata
+        let imagesHtml = '';
+        let meta = msg.metadata;
+        if (typeof meta === 'string') {
+            try { meta = JSON.parse(meta); } catch { meta = null; }
+        }
+        if (meta && meta.images && meta.images.length > 0) {
+            const imgs = meta.images.map(url =>
+                `<img src="${this._esc(url)}" loading="lazy" onclick="window.open(this.src)">`
+            ).join('');
+            imagesHtml = `<div class="msgImages">${imgs}</div>`;
+        }
+
+        const contentHtml = imagesHtml + (displayContent ? this._esc(displayContent) : '');
+        el.innerHTML = `<div class="msgC"><div class="bub">${contentHtml}</div>` +
             `<div class="meta">${msg.is_proactive ? '<span class="tag">主动消息</span>' : ''}<span>${time}</span></div></div>`;
 
         this.$chatIn.appendChild(el);

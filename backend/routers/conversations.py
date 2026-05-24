@@ -47,7 +47,7 @@ def delete_conversation(conv_id: int):
 def get_messages(conv_id: int, limit: int = 100, offset: int = 0):
     db = get_db()
     rows = db.execute(
-        "SELECT id, conversation_id, role, content, token_count, is_proactive, created_at "
+        "SELECT id, conversation_id, role, content, token_count, is_proactive, metadata, created_at "
         "FROM messages WHERE conversation_id=? ORDER BY created_at LIMIT ? OFFSET ?",
         (conv_id, limit, offset)
     ).fetchall()

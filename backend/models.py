@@ -53,7 +53,8 @@ class ConversationOut(BaseModel):
 # ---- Chat ----
 class ChatRequest(BaseModel):
     conversation_id: int = 1
-    content: str
+    content: str = ""
+    images: Optional[List[str]] = None  # base64 data URL list
 
 
 # ---- Messages ----

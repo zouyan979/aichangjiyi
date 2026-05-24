@@ -45,7 +45,11 @@ class LLMService:
                 if m["role"] == "system":
                     system_parts.append(m["content"])
                 elif m["role"] in ("user", "assistant"):
-                    chat_messages.append({"role": m["role"], "content": m["content"]})
+                    content = m["content"]
+                    # Convert OpenAI vision format to Anthropic format
+                    if isinstance(content, list):
+                        content = self._convert_to_anthropic_content(content)
+                    chat_messages.append({"role": m["role"], "content": content})
             # Anthropic requires messages to start with 'user' role
             if chat_messages and chat_messages[0]["role"] != "user":
                 chat_messages.insert(0, {"role": "user", "content": "..."})
@@ -68,6 +72,35 @@ class LLMService:
                 "max_tokens": max_tokens,
                 "temperature": cfg.get("temperature", 0.8)
             }
+
+    @staticmethod
+    def _convert_to_anthropic_content(content: list) -> list:
+        """Convert OpenAI vision format to Anthropic vision format."""
+        result = []
+        for item in content:
+            if item.get("type") == "image_url":
+                url = item.get("image_url", {}).get("url", "")
+                if url.startswith("data:"):
+                    # data:image/jpeg;base64,XXX
+                    parts = url.split(",", 1)
+                    if len(parts) == 2:
+                        media_type = parts[0].split(":")[1].split(";")[0]
+                        result.append({
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": media_type,
+                                "data": parts[1]
+                            }
+                        })
+                else:
+                    result.append({
+                        "type": "image",
+                        "source": {"type": "url", "url": url}
+                    })
+            elif item.get("type") == "text":
+                result.append(item)
+        return result
 
     def _parse_stream_chunk(self, line: str, anthropic: bool) -> str | None:
         """Parse a single SSE line and return content chunk or None."""

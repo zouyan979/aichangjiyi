@@ -4,6 +4,7 @@ import asyncio
 import logging
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
+from ..database import get_db
 from ..models import ChatRequest
 from ..services.llm_service import llm_service
 from ..services.context_builder import context_builder
@@ -27,18 +28,29 @@ async def chat(req: ChatRequest):
     if not llm_service.is_ready():
         raise HTTPException(400, "请先配置API")
 
-    # Save user message
+    # Save user message with image metadata
     user_tokens = estimate_tokens(req.content)
+    if req.images:
+        user_tokens += len(req.images) * 500  # estimate ~500 tokens per image
+
     msg_id = memory_service.save_message(req.conversation_id, "user", req.content, user_tokens)
+
+    # Store image metadata
+    if req.images:
+        metadata = json.dumps({"images": req.images})
+        db = get_db()
+        db.execute("UPDATE messages SET metadata=? WHERE id=?", (metadata, msg_id))
+        db.commit()
 
     # Web search (if enabled and query warrants it)
     search_results = None
     if search_service.should_search(req.content):
         search_results = await search_service.search(req.content)
 
-    # Build context
+    # Build context with images
     messages = context_builder.build(req.content, req.conversation_id,
-                                     search_results=search_results)
+                                     search_results=search_results,
+                                     current_images=req.images)
 
     # Collect full response - shared between generator and background task
     state = {"content": "", "error": None, "done": False}

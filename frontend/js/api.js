@@ -123,8 +123,31 @@ const API = {
         throw lastError;
     },
 
+    // ===== Image Upload =====
+    async uploadImages(files) {
+        const formData = new FormData();
+        for (const file of files) {
+            formData.append('files', file);
+        }
+        const url = this.base + '/upload';
+        const headers = {};
+        if (this._token) {
+            headers['Authorization'] = 'Bearer ' + this._token;
+        }
+        const resp = await fetch(url, {
+            method: 'POST',
+            headers,
+            body: formData
+        });
+        if (!resp.ok) {
+            const text = await resp.text().catch(() => '');
+            throw new Error(`上传失败 ${resp.status}: ${text.slice(0, 200)}`);
+        }
+        return resp.json();
+    },
+
     // ===== Streaming with timeout + reconnect =====
-    async *streamChat(conversationId, content) {
+    async *streamChat(conversationId, content, images) {
         const maxStreamRetries = 1;
 
         for (let attempt = 0; attempt <= maxStreamRetries; attempt++) {
@@ -140,7 +163,7 @@ const API = {
                 const resp = await fetch(this.base + '/chat', {
                     method: 'POST',
                     headers,
-                    body: JSON.stringify({ conversation_id: conversationId, content }),
+                    body: JSON.stringify({ conversation_id: conversationId, content, images: images || null }),
                     signal: controller.signal
                 });
                 clearTimeout(timer);

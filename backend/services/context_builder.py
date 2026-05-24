@@ -1,4 +1,7 @@
 from __future__ import annotations
+import json
+import os
+import base64
 import logging
 from .persona_service import persona_service
 from .memory_service import memory_service
@@ -15,7 +18,8 @@ class ContextBuilder:
 
     def build(self, user_message: str, conversation_id: int,
               token_budget: int = DEFAULT_TOKEN_BUDGET,
-              search_results: list[dict] | None = None) -> list[dict]:
+              search_results: list[dict] | None = None,
+              current_images: list[str] | None = None) -> list[dict]:
         messages = []
 
         # Step 1: Build system prompt (fixed costs)
@@ -25,10 +29,33 @@ class ContextBuilder:
 
         # Step 2: Recent messages (already includes current user message since it's saved to DB first)
         recent = self._select_recent_messages(user_message, conversation_id, token_budget)
+        img_count = 0
         for m in recent:
             role = m["role"]
             if role in ("user", "assistant"):
-                messages.append({"role": role, "content": m["content"]})
+                # Check if message has images in metadata
+                meta = {}
+                if m.get("metadata"):
+                    try:
+                        meta = json.loads(m["metadata"]) if isinstance(m["metadata"], str) else m["metadata"]
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+
+                msg_images = meta.get("images", []) if isinstance(meta, dict) else []
+
+                # For the last user message (current), use current_images if provided
+                is_last_user = (m == recent[-1] and role == "user" and current_images)
+                if is_last_user:
+                    msg_images = current_images
+
+                if msg_images and img_count < 6:  # max 6 images total in context
+                    # Limit images per message
+                    limited = msg_images[:2]
+                    img_count += len(limited)
+                    content = self._build_vision_content(m["content"], limited)
+                    messages.append({"role": role, "content": content})
+                else:
+                    messages.append({"role": role, "content": m["content"]})
 
         # Log token distribution
         sys_tokens = estimate_tokens(system_prompt)
@@ -147,6 +174,42 @@ class ContextBuilder:
             used += tokens
 
         return selected
+
+    def _build_vision_content(self, text: str, images: list[str]) -> list[dict]:
+        """Build OpenAI vision format content array."""
+        content = []
+        for img in images:
+            data_url = self._image_to_data_url(img)
+            if data_url:
+                content.append({"type": "image_url", "image_url": {"url": data_url}})
+        if text:
+            content.append({"type": "text", "text": text})
+        return content if content else text
+
+    def _image_to_data_url(self, img: str) -> str | None:
+        """Convert image path or data URL to data URL."""
+        if img.startswith("data:"):
+            return img
+        # It's a file path like "uploads/xxx.jpg"
+        from ..config import DB_PATH
+        base_dir = os.path.dirname(DB_PATH)
+        full_path = os.path.join(base_dir, os.path.basename(os.path.dirname(img)), os.path.basename(img))
+        if not os.path.exists(full_path):
+            full_path = os.path.join(base_dir, img)
+        if not os.path.exists(full_path):
+            log.warning("Image not found: %s", img)
+            return None
+        try:
+            with open(full_path, "rb") as f:
+                data = f.read()
+            ext = os.path.splitext(full_path)[1].lower()
+            mime = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+                    ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp"}.get(ext, "image/jpeg")
+            b64 = base64.b64encode(data).decode()
+            return f"data:{mime};base64,{b64}"
+        except Exception as e:
+            log.error("Failed to read image %s: %s", img, e)
+            return None
 
     def _format_core_facts(self, facts: list, budget: int) -> str:
         if not facts:

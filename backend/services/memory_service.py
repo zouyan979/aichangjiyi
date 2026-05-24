@@ -175,7 +175,7 @@ class MemoryService:
     def get_recent_messages(self, conversation_id: int, limit: int = 20) -> list:
         db = get_db()
         rows = db.execute(
-            "SELECT id, role, content, token_count, is_proactive, created_at "
+            "SELECT id, role, content, token_count, is_proactive, metadata, created_at "
             "FROM messages WHERE conversation_id=? AND is_summarized=0 "
             "ORDER BY created_at DESC LIMIT ?",
             (conversation_id, limit)

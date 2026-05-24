@@ -28,6 +28,7 @@ from .routers import persona as persona_router
 from .routers import proactive as proactive_router
 from .routers import tts as tts_router
 from .routers import auth as auth_router
+from .routers import upload as upload_router
 from .services.proactive_engine import proactive_engine
 
 
@@ -62,6 +63,7 @@ async def auth_middleware(request: Request, call_next):
         path.startswith("/api/auth")
         or path.startswith("/css")
         or path.startswith("/js")
+        or path.startswith("/uploads")
         or path == "/"
         or path == "/index.html"
         or not path.startswith("/api")
@@ -86,6 +88,12 @@ app.include_router(memory_router.router)
 app.include_router(persona_router.router)
 app.include_router(proactive_router.router)
 app.include_router(tts_router.router)
+app.include_router(upload_router.router)
+
+# Serve uploaded images
+_uploads_dir = os.path.join(os.path.dirname(__file__), "data", "uploads")
+os.makedirs(_uploads_dir, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=_uploads_dir), name="uploads")
 
 # Serve frontend static files
 if getattr(sys, 'frozen', False):
