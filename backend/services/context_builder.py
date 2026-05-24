@@ -59,8 +59,20 @@ class ContextBuilder:
 
         # Log token distribution
         sys_tokens = estimate_tokens(system_prompt)
-        msg_tokens = sum(estimate_tokens(m["content"]) for m in messages if m["role"] != "system")
-        total = estimate_messages_tokens(messages)
+        msg_tokens = 0
+        for m in messages:
+            if m["role"] == "system":
+                continue
+            c = m["content"]
+            if isinstance(c, list):
+                for item in c:
+                    if item.get("type") == "text":
+                        msg_tokens += estimate_tokens(item.get("text", ""))
+                    elif item.get("type") == "image_url":
+                        msg_tokens += 500  # estimate per image
+            else:
+                msg_tokens += estimate_tokens(c)
+        total = sys_tokens + msg_tokens
         log.info(
             "Context built: system=%d tokens, msgs=%d tokens (%d messages), total=%d, budget=%d",
             sys_tokens, msg_tokens, len(messages) - 1, total, token_budget
